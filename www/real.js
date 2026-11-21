@@ -235,8 +235,8 @@ async function exportBackup(){
     else{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([json],{type:"application/json"}));a.download=name;a.click();toast("백업 파일을 내려받았어요")}
     if(typeof renderAcct==="function")renderAcct();
   }catch(e){console.warn(e);toast("백업을 만들지 못했어요")}}
-function importBackup(){const inp=document.createElement("input");inp.type="file";inp.accept="application/json,.json";
-  inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(j.app!=="archive"||!Array.isArray(j.items))throw 0;
+function importBackup(){const inp=document.createElement("input");inp.type="file";inp.accept="*/*";
+  inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;toast("불러오는 중…");try{const txt=await f.text();let j;try{j=JSON.parse(txt.replace(/^\uFEFF/,""))}catch(e){devLog({k:"err",msg:"백업 파일 읽기: "+f.name+" "+f.size+"B"});throw e}if(j.app!=="archive"||!Array.isArray(j.items))throw 0;
       const cur=new Map(ITEMS.map(x=>[x.id,x]));let add=0,upd=0;j.items.forEach(x=>{if(cur.has(x.id)){Object.assign(cur.get(x.id),x);upd++}else{ITEMS.push(x);add++}});
       if(j.prefs&&confirm("설정(내 사이즈 · 테마 등)도 백업 때 것으로 바꿀까요?")){localStorage.setItem("archive-prefs",JSON.stringify(j.prefs))}
       await persistAll();renderPins();updateCounts();toast(`불러왔어요 · 새 기록 ${add}개, 겹친 기록 ${upd}개 갱신`);if(j.prefs)setTimeout(()=>location.reload(),1200)}
