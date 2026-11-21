@@ -239,7 +239,7 @@ function importBackup(){const inp=document.createElement("input");inp.type="file
   inp.onchange=async()=>{const f=inp.files&&inp.files[0];if(!f)return;toast("불러오는 중…");try{const txt=await f.text();let j;try{j=JSON.parse(txt.replace(/^\uFEFF/,""))}catch(e){devLog({k:"err",msg:"백업 파일 읽기: "+f.name+" "+f.size+"B"});throw e}if(j.app!=="archive"||!Array.isArray(j.items))throw 0;
       const cur=new Map(ITEMS.map(x=>[x.id,x]));let add=0,upd=0;j.items.forEach(x=>{if(cur.has(x.id)){Object.assign(cur.get(x.id),x);upd++}else{ITEMS.push(x);add++}});
       if(j.prefs&&confirm("설정(내 사이즈 · 테마 등)도 백업 때 것으로 바꿀까요?")){localStorage.setItem("archive-prefs",JSON.stringify(j.prefs))}
-      await persistAll();renderPins();updateCounts();toast(`불러왔어요 · 새 기록 ${add}개, 겹친 기록 ${upd}개 갱신`);if(j.prefs)setTimeout(()=>location.reload(),1200)}
+      await persistAll();renderPins();updateCounts();toast(`불러왔어요 · 새 기록 ${add}개, 겹친 기록 ${upd}개 갱신`);if(typeof G!=="undefined"&&G.on)setTimeout(()=>uploadBackup(true).then(()=>{toast("드라이브에도 백업했어요");if($("acctCard"))renderAcct()}).catch(()=>{}),1500);if(j.prefs)setTimeout(()=>location.reload(),1200)}
     catch(e){toast("아카이브 백업 파일이 아니에요")}};inp.click()}
 window.archiveExport=exportBackup;window.archiveImport=importBackup;
 
@@ -371,21 +371,26 @@ async function gToken(interactive){
   try{await slInit();if(SL.refresh){const r=await SL.refresh({provider:"google",options:{scopes:SCOPES}});if(r){try{takeLogin(r);return G.token}catch(e){}}}}catch(e){}
   if(!interactive){G.need=true;saveG();throw new Error("다시 연결 필요")}
   await slInit();const res=await SL.login({provider:"google",options:{scopes:SCOPES,filterByAuthorizedAccounts:true,autoSelectEnabled:true}});takeLogin(res);return G.token}
-async function drive(path,opt={},interactive){const tok=await gToken(interactive);
-  const r=await WF("https://www.googleapis.com/"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+tok}});
-  if(r.status===401){G.at=0;saveG();if(interactive){const t2=await gToken(true);return WF("https://www.googleapis.com/"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+t2}})}G.need=true;saveG();throw new Error("다시 연결 필요")}
-  if(!r.ok)throw new Error("드라이브 "+r.status);return r}
+async function drive(path,opt={},interactive){
+  const call=async tok=>{const url="https://www.googleapis.com/"+path,headers={...(opt.headers||{}),Authorization:"Bearer "+tok};
+    if(Http){const r=await Http.request({url,method:opt.method||"GET",headers,data:opt.data,responseType:opt.raw?"text":"json",connectTimeout:20000,readTimeout:120000});
+      return {status:r.status,ok:r.status>=200&&r.status<300,json:async()=>typeof r.data==="string"?(r.data?JSON.parse(r.data):{}):r.data,text:async()=>typeof r.data==="string"?r.data:JSON.stringify(r.data)}}
+    const body=opt.data==null?undefined:typeof opt.data==="string"?opt.data:JSON.stringify(opt.data);
+    const r=await WF(url,{method:opt.method||"GET",headers,body});return r};
+  let r=await call(await gToken(interactive));
+  if(r.status===401){G.at=0;saveG();if(interactive){r=await call(await gToken(true))}else{G.need=true;saveG();throw new Error("다시 연결 필요")}}
+  if(!r.ok){let msg="";try{msg=(await r.text()).slice(0,140)}catch(e){}throw new Error("드라이브 "+r.status+(msg?" "+msg:""))}
+  return r}
 async function findBackup(interactive){const r=await drive(`drive/v3/files?spaces=appDataFolder&q=${encodeURIComponent(`name='${BKNAME}'`)}&fields=files(id,modifiedTime,size)&orderBy=modifiedTime desc`,{},interactive);const j=await r.json();return (j.files||[])[0]||null}
 async function uploadBackup(interactive){inBk=true;let json;try{json=await buildBackup()}finally{inBk=false}const h=hashStr(json);if(h===G.lastHash&&!interactive)return "same";
-  const f=await findBackup(interactive);const bd="arc"+Date.now().toString(36);
-  const meta=f?{name:BKNAME,mimeType:"application/json"}:{name:BKNAME,parents:["appDataFolder"],mimeType:"application/json"};
-  const body=new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n`,json,`\r\n--${bd}--`],{type:"multipart/related; boundary="+bd});
-  await drive(f?`upload/drive/v3/files/${f.id}?uploadType=multipart`:"upload/drive/v3/files?uploadType=multipart",{method:f?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+bd},body},interactive);
+  let f=await findBackup(interactive);
+  if(!f){const r=await drive("drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},data:{name:BKNAME,parents:["appDataFolder"],mimeType:"application/json"}},interactive);f=await r.json();if(!f||!f.id)throw new Error("드라이브에 파일을 만들지 못했어요")}
+  await drive(`upload/drive/v3/files/${f.id}?uploadType=media&fields=id,size`,{method:"PATCH",headers:{"Content-Type":"application/json"},data:json},interactive);
   G.last=stamp();G.lastHash=h;G.need=false;saveG();devLog({k:"ok",host:"드라이브 백업",msg:`${ITEMS.length}개 · ${Math.round(json.length/1024)}KB`});return "ok"}
 async function restoreFromDrive(f){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},true);const j=await r.json();if(j.app!=="archive"||!Array.isArray(j.items))throw new Error("백업 파일이 아니에요");
   ITEMS.splice(0,ITEMS.length,...j.items);if(j.prefs){try{const cur=JSON.parse(localStorage.getItem("archive-prefs")||"{}");localStorage.setItem("archive-prefs",JSON.stringify({...j.prefs,onboarded:cur.onboarded||j.prefs.onboarded}))}catch(e){}}
   await persistAll();return j}
-let autoT=0;function autoBackupSoon(){if(!G.on||G.auto===false||!gAvailable())return;clearTimeout(autoT);autoT=setTimeout(async()=>{try{await uploadBackup(false);if(typeof renderAcct==="function"&&$("acctCard"))renderAcct()}catch(e){}},45000)}
+let autoT=0;function autoBackupSoon(){if(!G.on||G.auto===false||!gAvailable())return;clearTimeout(autoT);autoT=setTimeout(async()=>{try{await uploadBackup(false);G.err="";saveG()}catch(e){G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"드라이브 백업",msg:G.err})}if(typeof renderAcct==="function"&&$("acctCard"))renderAcct()},20000)}
 let inBk=false;const _pa=persistAll;persistAll=async function(){const r=await _pa();if(!inBk)autoBackupSoon();return r};
 window.archiveGoogle={login:gLogin,upload:()=>uploadBackup(true),find:()=>findBackup(true)};
 async function askRestore(after){try{const f=await findBackup(true);if(!f){after&&after(false);return}
@@ -400,7 +405,7 @@ window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{
   if(!G.on){c.innerHTML=`<div class="acct0"><b>기록이 사라지지 않게 지켜요</b><p>Google 계정으로 로그인하면 기록과 사진이 내 Google 드라이브의 앱 전용 공간에 자동으로 백업돼요. 폰을 바꾸거나 앱을 다시 깔아도 그대로 돌아와요.</p>
       ${gAvailable()?`<button type="button" class="gbtn" id="gLogin2"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Google로 로그인</button><p class="sm">회원가입 없이 Google 계정 하나로 끝나요</p>`:`<p class="sm">Google 로그인은 앱에서만 돼요</p>`}</div>${localRows}`;
     $("acctNote").textContent=`지금은 이 폰 안에만 있어요 · 옷 ${ITEMS.length}개`}
-  else{c.innerHTML=`<div class="row"><span class="lb acctme">${G.img?`<img src="${escH(G.img)}" alt="" style="width:36px;height:36px;border-radius:50%">`:`<i>${escH((G.name||G.email||"G")[0].toUpperCase())}</i>`}<span>${escH(G.email||G.name)}<small class="${G.need?"":"ok"}">${G.need?"● 다시 연결이 필요해요":"● 자동 백업 켜짐"} · 마지막 ${escH(G.last||"아직 없음")}</small></span></span></div>
+  else{c.innerHTML=`<div class="row"><span class="lb acctme">${G.img?`<img src="${escH(G.img)}" alt="" style="width:36px;height:36px;border-radius:50%">`:`<i>${escH((G.name||G.email||"G")[0].toUpperCase())}</i>`}<span>${escH(G.email||G.name)}<small class="${G.need?"":"ok"}">${G.need?"● 다시 연결이 필요해요":"● 자동 백업 켜짐"} · 마지막 ${escH(G.last||"아직 없음")}</small></span></span></div>${G.err&&!G.need?`<div class="row"><span class="lb" style="color:#c0392b">백업 실패<small style="color:#c0392b">${escH(G.err)}</small></span></div>`:""}
       ${G.need?`<button class="row" type="button" id="gRe"><span class="lb" style="color:var(--orange);font-weight:700">다시 연결하기<small>로그인이 만료됐어요 · 한 번 눌러주세요</small></span><span class="val"></span></button>`:""}
       <div class="row"><span class="lb">자동 백업<small>기록을 바꾸면 잠시 뒤 드라이브에 올려요</small></span><button class="sw" type="button" role="switch" id="gAuto" aria-checked="${G.auto!==false}" aria-label="자동 백업"></button></div>
       <button class="row" type="button" id="gNow"><span class="lb">지금 백업하기<small>옷 ${ITEMS.length}개 · 사진 ${ITEMS.filter(x=>x.photo).length}장</small></span><span class="val"></span></button>
@@ -412,12 +417,12 @@ window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{
   const L=$("gLogin2");if(L)L.onclick=async()=>{L.disabled=true;try{await gLogin();toast("로그인했어요");renderAcct();askRestore(ok=>{if(ok)location.reload();else uploadBackup(true).then(()=>{toast("드라이브에 백업했어요");renderAcct()}).catch(e=>toast("백업 실패 · "+(e.message||e)))})}catch(e){toast("로그인하지 못했어요 · "+(e.message||e))}finally{L.disabled=false}};
   const re=$("gRe");if(re)re.onclick=async()=>{try{await gToken(true);G.need=false;saveG();await uploadBackup(true);toast("다시 연결했어요");renderAcct()}catch(e){toast("연결하지 못했어요")}};
   const au=$("gAuto");if(au)au.onclick=()=>{G.auto=!(G.auto!==false);saveG();renderAcct()};
-  const nw=$("gNow");if(nw)nw.onclick=async()=>{nw.disabled=true;toast("백업 중…");try{await uploadBackup(true);toast("드라이브에 백업했어요");renderAcct()}catch(e){toast("백업하지 못했어요 · "+(e.message||e))}finally{nw.disabled=false}};
+  const nw=$("gNow");if(nw)nw.onclick=async()=>{nw.disabled=true;toast("백업 중…");try{await uploadBackup(true);G.err="";saveG();toast("드라이브에 백업했어요")}catch(e){G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"드라이브 백업",msg:G.err});toast("백업하지 못했어요 · "+G.err)}finally{nw.disabled=false;renderAcct()}};
   const rs=$("gRestore");if(rs)rs.onclick=()=>askRestore(ok=>{if(ok)setTimeout(()=>location.reload(),800);else toast("불러오지 않았어요")});
   const out=$("gOut");if(out)out.onclick=async()=>{if(!confirm("로그아웃할까요? 폰 안 기록은 그대로 남아요."))return;try{await slInit();await SL.logout({provider:"google"})}catch(e){}G={};saveG();renderAcct();toast("로그아웃했어요")};
 };
 /* 앱 열 때: 하루 넘게 백업 안 됐으면 조용히 시도 */
-if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{if($("acctCard"))renderAcct()}).catch(()=>{})},6000);
+if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{G.err="";saveG();if($("acctCard"))renderAcct()}).catch(e=>{G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"드라이브 백업",msg:G.err});if($("acctCard"))renderAcct()})},6000);
 
 /* ---------- 9) 스와이프로 카테고리 메뉴 열고 닫기 ---------- */
 (function(){const A=$("app")||document.querySelector(".app");if(!A)return;
