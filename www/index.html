@@ -344,6 +344,8 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .obchips{display:flex;gap:6px;overflow-x:auto;padding:2px 14px 4px 0;scrollbar-width:none}.obchips::-webkit-scrollbar{display:none}
 .obchips button{flex:0 0 auto;border:1.5px solid #ddd5c1;background:var(--cream);border-radius:10px;padding:9px 12px;font:inherit;font-family:var(--mono);font-size:13px;color:var(--indigo);cursor:pointer}
 .obchips button[aria-pressed="true"]{background:var(--indigo);border-color:var(--indigo);color:var(--cream)}
+.obex{margin:6px 0 0;font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--orange)}
+.obnote.ex{opacity:.85;border:1.5px dashed #cfc6b0;box-shadow:none}
 .obnote{margin:10px 0;display:flex;flex-direction:column;gap:2px;background:var(--paper);border-radius:18px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.12)}
 .obnote .nh{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
 .obnote .nh i{font-style:normal;width:16px;height:16px;border-radius:4px;background:var(--indigo);color:var(--cream);font-size:9px;font-weight:700;display:grid;place-items:center}
@@ -2130,7 +2132,7 @@ function obRender(){const o=$("ob");const dots=`<div class="obdots">${[0,1,2].ma
     o.querySelectorAll(".obchips").forEach(r=>{const b=r.querySelector("button[aria-pressed=true]");if(b)r.scrollLeft=Math.max(0,b.offsetLeft-r.offsetLeft-r.clientWidth/2+b.offsetWidth/2)});return}
   if(obStep===2){o.innerHTML=`<div class="obwrap"><div class="obhead">${dots}<span></span></div>
       <h2>재입고 소식, 받아볼까요?</h2><p class="obp">위시에 담은 옷이 내 사이즈로 다시 들어오거나 가격이 내려가면 알려드려요. 알림은 직접 켠 옷만 와요.</p>
-      <div class="obnote"><span class="nh"><i>A</i>아카이브 · 지금</span><b>M 재입고</b><span class="nb">데님 팬츠 · 즐겨 찾는 쇼핑몰 ₩189,000</span></div>
+      <p class="obex">알림은 이렇게 와요 · 예시</p><div class="obnote ex"><span class="nh"><i>A</i>아카이브 · 예시</span><b>M 재입고</b><span class="nb">데님 팬츠 · 즐겨 찾는 쇼핑몰 ₩189,000</span></div>
       <div class="obbot"><button type="button" class="obmain" data-ob="notifyOn">알림 받기</button><button type="button" class="obghost" data-ob="notifyOff">나중에</button>
       <p class="obsm">앱에서는 여기서 안드로이드 알림 허용 창이 떠요</p></div></div>`}
 }
