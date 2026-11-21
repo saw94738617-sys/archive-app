@@ -47,6 +47,8 @@ jobs:
           npm run assets
           npx cap sync android
           cp native/MainActivity.java android/app/src/main/java/com/archive/myclothes/MainActivity.java
+          printf '\nsubprojects {\n    configurations.all {\n        resolutionStrategy {\n            force "androidx.browser:browser:1.8.0"\n        }\n    }\n}\n' >> android/build.gradle
+          tail -8 android/build.gradle
           M=android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
           grep -n "uses-permission" "$M"
