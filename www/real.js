@@ -419,6 +419,19 @@ window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{
 /* 앱 열 때: 하루 넘게 백업 안 됐으면 조용히 시도 */
 if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{if($("acctCard"))renderAcct()}).catch(()=>{})},6000);
 
+/* ---------- 9) 스와이프로 카테고리 메뉴 열고 닫기 ---------- */
+(function(){const A=$("app")||document.querySelector(".app");if(!A)return;
+  const isOpen=()=>A.classList.contains("open");
+  const blocked=()=>["detail","settings","rec","statsPanel","brandsPanel","searchPanel","dev","ed"].some(id=>{const e=$(id);return e&&e.classList.contains("on")})||[["ob"],["updModal"],["lock"]].some(([id])=>{const e=$(id);return e&&!e.hidden&&e.offsetParent!==null});
+  const inHScroll=el=>{for(let n=el;n&&n!==A;n=n.parentElement){if(n.scrollWidth>n.clientWidth+4){const o=getComputedStyle(n).overflowX;if(o==="auto"||o==="scroll")return true}}return false};
+  let x0=0,y0=0,t0=0,track=false;
+  A.addEventListener("touchstart",e=>{if(e.touches.length!==1){track=false;return}const t=e.touches[0];x0=t.clientX;y0=t.clientY;t0=Date.now();
+    track=!blocked()&&!(isOpen()?false:inHScroll(e.target))&&!(!isOpen()&&x0<24)},{passive:true});
+  A.addEventListener("touchend",e=>{if(!track)return;track=false;const t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0,dt=Date.now()-t0;
+    if(Math.abs(dx)<60||Math.abs(dy)>Math.abs(dx)*0.6||dt>700)return;
+    if(dx>0&&!isOpen())setMenu(true);else if(dx<0&&isOpen())setMenu(false)},{passive:true});
+})();
+
 /* ---------- 7) 앱 업데이트 확인 ---------- */
 const REPO="saw94738617-sys/archive-app";
 const BUILD=+(window.ARCHIVE_BUILD||0);
