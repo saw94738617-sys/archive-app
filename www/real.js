@@ -275,20 +275,9 @@ if(NATIVE){
   window.fillExampleChart=function(){};
 }
 
-/* 계정·백업 칸: 이번 버전은 폰 백업 파일 중심 */
-window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{last=localStorage.getItem("archive-lastbackup")||""}catch(e){}
-  c.innerHTML=`<div class="acct0"><b>기록은 이 폰에 저장돼요</b><p>앱을 지우거나 폰을 바꾸면 기록이 사라질 수 있어요. 가끔 백업 파일을 만들어 드라이브나 카톡 나에게 보내기로 보관해 두세요.</p></div>
-    <button class="row" type="button" id="bkExport"><span class="lb">백업 파일 만들기<small>${last?"마지막 백업 "+escH(last):"아직 백업한 적 없어요"} · 사진까지 한 파일로</small></span><span class="val"></span></button>
-    <button class="row" type="button" id="bkImport"><span class="lb">백업 파일 불러오기<small>새 폰이나 다시 깔았을 때</small></span><span class="val"></span></button>
-    <div class="row"><span class="lb">Google 드라이브 자동 백업<small>다음 업데이트에서 켜져요</small></span><span class="val" style="opacity:.5">준비 중</span></div>`;
-  $("acctNote").textContent=`옷 ${ITEMS.length}개 · 사진 ${ITEMS.filter(x=>x.photo).length}장 저장됨`;
-  $("bkExport").onclick=exportBackup;$("bkImport").onclick=importBackup};
-renderAcct();
 
-/* 첫 실행: Google 대신 시작하기 */
-const _obRender=window.obRender;if(typeof _obRender==="function"){window.obRender=function(){_obRender();const g=document.querySelector('#ob [data-ob="google"]');if(g){const n=g.nextElementSibling;g.remove();if(n&&n.classList.contains("obsm"))n.remove();const l=document.querySelector('#ob [data-ob="local"]');if(l){l.textContent="시작하기";l.className="gbtn";const sm=l.nextElementSibling;if(sm&&sm.classList.contains("obsm"))sm.textContent="기록은 이 폰에 저장돼요 · 설정에서 백업 파일을 만들 수 있어요"}}
-  const r=document.querySelector('#ob [data-ob="restore"]');if(r){r.onclick=ev=>{ev.stopPropagation();importBackup()}}}}
-if($("ob")&&!$("ob").hidden&&typeof obRender==="function")obRender();
+
+
 
 /* 저장 공간을 브라우저가 임의로 비우지 않게 요청 */
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
@@ -361,6 +350,75 @@ if(window.ARCHIVE_DEV){
   };
 }
 
+/* ---------- 8) Google 로그인 · 드라이브 자동 백업 ---------- */
+const GCLIENT=window.ARCHIVE_GOOGLE_CLIENT||"";
+const SL=NATIVE?plug("SocialLogin"):null;
+const SCOPES=["email","profile","https://www.googleapis.com/auth/drive.appdata"];
+const WF=(window.CapacitorWebFetch||window.fetch).bind(window);
+const BKNAME="archive-backup.json";
+let G={};try{G=JSON.parse(localStorage.getItem("archive-google")||"{}")}catch(e){}
+function saveG(){try{localStorage.setItem("archive-google",JSON.stringify(G))}catch(e){}}
+let slReady=null;
+function slInit(){if(!SL||!GCLIENT)return Promise.reject(new Error("Google 로그인 준비 안 됨"));if(!slReady)slReady=SL.initialize({google:{webClientId:GCLIENT}});return slReady}
+const gAvailable=()=>!!(SL&&GCLIENT);
+function takeLogin(res){const r=(res&&res.result)||res||{};const at=r.accessToken;const tok=typeof at==="string"?at:(at&&(at.token||at.accessToken));
+  if(!tok)throw new Error("드라이브 권한을 받지 못했어요");const p=r.profile||{};
+  G={on:true,email:p.email||G.email||"",name:p.name||p.givenName||G.name||"",img:p.imageUrl||G.img||"",token:tok,at:Date.now(),auto:G.auto!==false,last:G.last||"",lastHash:G.lastHash||"",need:false};saveG();return G}
+async function gLogin(){await slInit();const res=await SL.login({provider:"google",options:{scopes:SCOPES}});return takeLogin(res)}
+async function gToken(interactive){
+  if(G.on&&G.token&&Date.now()-(G.at||0)<50*60*1000)return G.token;
+  if(!G.on)throw new Error("로그인 필요");
+  try{await slInit();if(SL.refresh){const r=await SL.refresh({provider:"google",options:{scopes:SCOPES}});if(r){try{takeLogin(r);return G.token}catch(e){}}}}catch(e){}
+  if(!interactive){G.need=true;saveG();throw new Error("다시 연결 필요")}
+  await slInit();const res=await SL.login({provider:"google",options:{scopes:SCOPES,filterByAuthorizedAccounts:true,autoSelectEnabled:true}});takeLogin(res);return G.token}
+async function drive(path,opt={},interactive){const tok=await gToken(interactive);
+  const r=await WF("https://www.googleapis.com/"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+tok}});
+  if(r.status===401){G.at=0;saveG();if(interactive){const t2=await gToken(true);return WF("https://www.googleapis.com/"+path,{...opt,headers:{...(opt.headers||{}),Authorization:"Bearer "+t2}})}G.need=true;saveG();throw new Error("다시 연결 필요")}
+  if(!r.ok)throw new Error("드라이브 "+r.status);return r}
+async function findBackup(interactive){const r=await drive(`drive/v3/files?spaces=appDataFolder&q=${encodeURIComponent(`name='${BKNAME}'`)}&fields=files(id,modifiedTime,size)&orderBy=modifiedTime desc`,{},interactive);const j=await r.json();return (j.files||[])[0]||null}
+async function uploadBackup(interactive){inBk=true;let json;try{json=await buildBackup()}finally{inBk=false}const h=hashStr(json);if(h===G.lastHash&&!interactive)return "same";
+  const f=await findBackup(interactive);const bd="arc"+Date.now().toString(36);
+  const meta=f?{name:BKNAME,mimeType:"application/json"}:{name:BKNAME,parents:["appDataFolder"],mimeType:"application/json"};
+  const body=new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: application/json\r\n\r\n`,json,`\r\n--${bd}--`],{type:"multipart/related; boundary="+bd});
+  await drive(f?`upload/drive/v3/files/${f.id}?uploadType=multipart`:"upload/drive/v3/files?uploadType=multipart",{method:f?"PATCH":"POST",headers:{"Content-Type":"multipart/related; boundary="+bd},body},interactive);
+  G.last=stamp();G.lastHash=h;G.need=false;saveG();devLog({k:"ok",host:"드라이브 백업",msg:`${ITEMS.length}개 · ${Math.round(json.length/1024)}KB`});return "ok"}
+async function restoreFromDrive(f){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},true);const j=await r.json();if(j.app!=="archive"||!Array.isArray(j.items))throw new Error("백업 파일이 아니에요");
+  ITEMS.splice(0,ITEMS.length,...j.items);if(j.prefs){try{const cur=JSON.parse(localStorage.getItem("archive-prefs")||"{}");localStorage.setItem("archive-prefs",JSON.stringify({...j.prefs,onboarded:cur.onboarded||j.prefs.onboarded}))}catch(e){}}
+  await persistAll();return j}
+let autoT=0;function autoBackupSoon(){if(!G.on||G.auto===false||!gAvailable())return;clearTimeout(autoT);autoT=setTimeout(async()=>{try{await uploadBackup(false);if(typeof renderAcct==="function"&&$("acctCard"))renderAcct()}catch(e){}},45000)}
+let inBk=false;const _pa=persistAll;persistAll=async function(){const r=await _pa();if(!inBk)autoBackupSoon();return r};
+window.archiveGoogle={login:gLogin,upload:()=>uploadBackup(true),find:()=>findBackup(true)};
+async function askRestore(after){try{const f=await findBackup(true);if(!f){after&&after(false);return}
+  const when=new Date(f.modifiedTime).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false});
+  if(confirm(`드라이브에 ${when} 백업이 있어요 (${Math.round((+f.size||0)/1024)}KB).\n불러올까요? 지금 폰에 있는 기록은 백업 내용으로 바뀌어요.`)){const j=await restoreFromDrive(f);toast(`불러왔어요 · 옷 ${j.items.length}개`);after&&after(true)}else after&&after(false)}
+  catch(e){toast("백업을 확인하지 못했어요 · "+(e.message||e));after&&after(false)}}
+
+/* 설정 › 계정·백업 */
+window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{last=localStorage.getItem("archive-lastbackup")||""}catch(e){}
+  const localRows=`<button class="row" type="button" id="bkExport"><span class="lb">백업 파일 만들기<small>${last?"마지막 "+escH(last):"폰 · 카톡 · 드라이브에 직접 보관"} · 사진까지 한 파일로</small></span><span class="val"></span></button>
+    <button class="row" type="button" id="bkImport"><span class="lb">백업 파일 불러오기<small>파일로 옮길 때</small></span><span class="val"></span></button>`;
+  if(!G.on){c.innerHTML=`<div class="acct0"><b>기록이 사라지지 않게 지켜요</b><p>Google 계정으로 로그인하면 기록과 사진이 내 Google 드라이브의 앱 전용 공간에 자동으로 백업돼요. 폰을 바꾸거나 앱을 다시 깔아도 그대로 돌아와요.</p>
+      ${gAvailable()?`<button type="button" class="gbtn" id="gLogin2"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Google로 로그인</button><p class="sm">회원가입 없이 Google 계정 하나로 끝나요</p>`:`<p class="sm">Google 로그인은 앱에서만 돼요</p>`}</div>${localRows}`;
+    $("acctNote").textContent=`지금은 이 폰 안에만 있어요 · 옷 ${ITEMS.length}개`}
+  else{c.innerHTML=`<div class="row"><span class="lb acctme">${G.img?`<img src="${escH(G.img)}" alt="" style="width:36px;height:36px;border-radius:50%">`:`<i>${escH((G.name||G.email||"G")[0].toUpperCase())}</i>`}<span>${escH(G.email||G.name)}<small class="${G.need?"":"ok"}">${G.need?"● 다시 연결이 필요해요":"● 자동 백업 켜짐"} · 마지막 ${escH(G.last||"아직 없음")}</small></span></span></div>
+      ${G.need?`<button class="row" type="button" id="gRe"><span class="lb" style="color:var(--orange);font-weight:700">다시 연결하기<small>로그인이 만료됐어요 · 한 번 눌러주세요</small></span><span class="val"></span></button>`:""}
+      <div class="row"><span class="lb">자동 백업<small>기록을 바꾸면 잠시 뒤 드라이브에 올려요</small></span><button class="sw" type="button" role="switch" id="gAuto" aria-checked="${G.auto!==false}" aria-label="자동 백업"></button></div>
+      <button class="row" type="button" id="gNow"><span class="lb">지금 백업하기<small>옷 ${ITEMS.length}개 · 사진 ${ITEMS.filter(x=>x.photo).length}장</small></span><span class="val"></span></button>
+      <button class="row" type="button" id="gRestore"><span class="lb">드라이브에서 불러오기<small>새 폰이나 다시 깔았을 때</small></span><span class="val"></span></button>
+      ${localRows}
+      <button class="row" type="button" id="gOut"><span class="lb">로그아웃<small>폰 안 기록은 그대로 남아요</small></span><span class="val"></span></button>`;
+    $("acctNote").textContent="백업은 내 Google 드라이브의 앱 전용 공간에 저장돼요. 나만 볼 수 있고 드라이브 목록에는 안 보여요."}
+  $("bkExport").onclick=exportBackup;$("bkImport").onclick=importBackup;
+  const L=$("gLogin2");if(L)L.onclick=async()=>{L.disabled=true;try{await gLogin();toast("로그인했어요");renderAcct();askRestore(ok=>{if(ok)location.reload();else uploadBackup(true).then(()=>{toast("드라이브에 백업했어요");renderAcct()}).catch(e=>toast("백업 실패 · "+(e.message||e)))})}catch(e){toast("로그인하지 못했어요 · "+(e.message||e))}finally{L.disabled=false}};
+  const re=$("gRe");if(re)re.onclick=async()=>{try{await gToken(true);G.need=false;saveG();await uploadBackup(true);toast("다시 연결했어요");renderAcct()}catch(e){toast("연결하지 못했어요")}};
+  const au=$("gAuto");if(au)au.onclick=()=>{G.auto=!(G.auto!==false);saveG();renderAcct()};
+  const nw=$("gNow");if(nw)nw.onclick=async()=>{nw.disabled=true;toast("백업 중…");try{await uploadBackup(true);toast("드라이브에 백업했어요");renderAcct()}catch(e){toast("백업하지 못했어요 · "+(e.message||e))}finally{nw.disabled=false}};
+  const rs=$("gRestore");if(rs)rs.onclick=()=>askRestore(ok=>{if(ok)setTimeout(()=>location.reload(),800);else toast("불러오지 않았어요")});
+  const out=$("gOut");if(out)out.onclick=async()=>{if(!confirm("로그아웃할까요? 폰 안 기록은 그대로 남아요."))return;try{await slInit();await SL.logout({provider:"google"})}catch(e){}G={};saveG();renderAcct();toast("로그아웃했어요")};
+};
+/* 앱 열 때: 하루 넘게 백업 안 됐으면 조용히 시도 */
+if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{if($("acctCard"))renderAcct()}).catch(()=>{})},6000);
+
 /* ---------- 7) 앱 업데이트 확인 ---------- */
 const REPO="saw94738617-sys/archive-app";
 const BUILD=+(window.ARCHIVE_BUILD||0);
@@ -405,6 +463,14 @@ window.archiveCheckUpdate=checkUpdate;
 if(ver){ver.title="눌러서 업데이트 확인";ver.addEventListener("click",()=>checkUpdate(true))}
 if(NATIVE&&AppP)AppP.addListener("resume",()=>{const t=+(window.__lastUpdCheck||0);if(Date.now()-t>6*36e5){window.__lastUpdCheck=Date.now();checkUpdate(false)}});
 
+/* 첫 실행: Google로 시작하기(앱) · 로그인 없이 · 백업 불러오기 */
+const _obRender=window.obRender;if(typeof _obRender==="function"){window.obRender=function(){_obRender();
+  const g=document.querySelector('#ob [data-ob="google"]');
+  if(g&&!gAvailable()){const n=g.nextElementSibling;g.remove();if(n&&n.classList.contains("obsm"))n.remove();const l=document.querySelector('#ob [data-ob="local"]');if(l){l.textContent="시작하기";l.className="gbtn"}}
+  else if(g){g.setAttribute("data-ob","google-real");g.onclick=async ev=>{ev.stopPropagation();g.disabled=true;try{await gLogin();toast("로그인했어요");askRestore(ok=>{if(ok){onboarded=true;savePrefs();setTimeout(()=>location.reload(),800)}else{obStep=1;obRender();uploadBackup(true).catch(()=>{})}})}catch(e){toast("로그인하지 못했어요 · "+(e.message||e))}finally{g.disabled=false}}}
+  const r=document.querySelector('#ob [data-ob="restore"]');if(r){r.textContent=gAvailable()?"예전에 쓰던 기록이 있어요 · 백업 파일 불러오기":r.textContent;r.onclick=ev=>{ev.stopPropagation();importBackup()}}}}
+if($("ob")&&!$("ob").hidden&&typeof obRender==="function")obRender();
+renderAcct();
 /* 시작 */
 load().then(()=>{if(typeof renderAcct==="function")renderAcct();if(NATIVE){window.__lastUpdCheck=Date.now();setTimeout(()=>checkUpdate(false),1800);setTimeout(checkAlerts,4000)}});
 })();

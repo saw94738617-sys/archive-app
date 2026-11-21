@@ -46,6 +46,7 @@ jobs:
           npx cap add android
           npm run assets
           npx cap sync android
+          cp native/MainActivity.java android/app/src/main/java/com/archive/myclothes/MainActivity.java
           M=android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
           grep -n "uses-permission" "$M"
