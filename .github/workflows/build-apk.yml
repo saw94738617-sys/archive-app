@@ -1,0 +1,113 @@
+name: APK 만들기
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: 안드로이드 SDK 확인
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/build-tools" | tail -3
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: 패키지 설치
+        run: npm install --no-audit --no-fund
+
+      - name: 버전 정하기
+        id: ver
+        run: echo "name=0.1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: 앱 버전 표시 바꾸기
+        run: |
+          sed -i 's/window.ARCHIVE_VERSION="0.1"/window.ARCHIVE_VERSION="${{ steps.ver.outputs.name }}";window.ARCHIVE_BUILD=${{ github.run_number }}/' www/index.html
+          grep -o 'ARCHIVE_VERSION="[^"]*";window.ARCHIVE_BUILD=[0-9]*' www/index.html
+
+      - name: 안드로이드 프로젝트 만들기
+        run: |
+          npx cap add android
+          npm run assets
+          npx cap sync android
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
+          grep -n "uses-permission" "$M"
+
+      - name: 버전 번호 넣기 (덮어 설치되게)
+        run: |
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i -E "s/versionName \"[^\"]+\"/versionName \"${{ steps.ver.outputs.name }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: APK 빌드
+        run: cd android && ./gradlew --no-daemon assembleRelease
+
+      - name: 서명 준비
+        env:
+          KEYSTORE_B64: ${{ secrets.ARCHIVE_KEYSTORE_B64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "BT=$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)" >> "$GITHUB_ENV"
+
+      - name: 일반 버전 서명
+        env:
+          KEYSTORE_PASS: ${{ secrets.ARCHIVE_KEYSTORE_PASS }}
+        run: |
+          "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:KEYSTORE_PASS --key-pass env:KEYSTORE_PASS --ks-key-alias archive --out "archive-${{ steps.ver.outputs.name }}.apk" aligned.apk
+          rm -f aligned.apk
+
+      - name: 개발자 버전 빌드
+        run: |
+          cp assets-dev/*.png assets/
+          npm run assets
+          S=android/app/src/main/res/values/strings.xml
+          sed -i -E 's#(<string name="(app_name|title_activity_main)">)[^<]*#\1아카이브 개발자#' "$S"
+          grep -E "app_name|title_activity_main" "$S"
+          F=android/app/src/main/assets/public/index.html
+          sed -i 's#<script>window.ARCHIVE_VERSION=#<script>window.ARCHIVE_DEV=true;window.ARCHIVE_VERSION=#' "$F"
+          grep -c "ARCHIVE_DEV=true" "$F"
+          cd android && ./gradlew --no-daemon assembleRelease
+
+      - name: 개발자 버전 서명
+        env:
+          KEYSTORE_PASS: ${{ secrets.ARCHIVE_KEYSTORE_PASS }}
+        run: |
+          "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.jks" --ks-pass env:KEYSTORE_PASS --key-pass env:KEYSTORE_PASS --ks-key-alias archive --out "archive-dev-${{ steps.ver.outputs.name }}.apk" aligned.apk
+          "$BT/apksigner" verify "archive-${{ steps.ver.outputs.name }}.apk"
+          "$BT/apksigner" verify "archive-dev-${{ steps.ver.outputs.name }}.apk"
+          rm -f aligned.apk "$RUNNER_TEMP/release.jks"
+
+      - name: 업데이트 내용 정리
+        run: |
+          git log -1 --pretty=%B | grep -v -E "Co-Authored-By|Claude-Session|^\s*$" > notes.md || true
+          printf '\n폰에서 이 페이지를 열고 APK를 눌러 설치하세요. 덮어 설치하면 기록은 그대로 남아요.\n- archive-dev-*.apk : 내 폰용 (개발자 메뉴 있음)\n- archive-*.apk : 일반 버전\n' >> notes.md
+          cat notes.md
+
+      - name: 릴리스에 APK 올리기
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: 아카이브 ${{ steps.ver.outputs.name }}
+          body_path: notes.md
+          files: |
+            archive-dev-${{ steps.ver.outputs.name }}.apk
+            archive-${{ steps.ver.outputs.name }}.apk

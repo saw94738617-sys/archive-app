@@ -1,0 +1,13 @@
+{
+  "appId": "com.archive.myclothes",
+  "appName": "아카이브",
+  "webDir": "www",
+  "backgroundColor": "#0b1030",
+  "android": {
+    "adjustMarginsForEdgeToEdge": "auto",
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}
