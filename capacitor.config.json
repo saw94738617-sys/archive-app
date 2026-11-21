@@ -8,6 +8,16 @@
     "allowMixedContent": false
   },
   "plugins": {
-    "CapacitorHttp": { "enabled": true }
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "BackgroundRunner": {
+      "label": "com.archive.myclothes.check",
+      "src": "runners/updates.js",
+      "event": "checkUpdate",
+      "repeat": true,
+      "interval": 180,
+      "autoStart": true
+    }
   }
 }
