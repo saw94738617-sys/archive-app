@@ -1082,31 +1082,38 @@ window.archiveChart={shoeChart,chartFromDetail};
 /* 이미 저장한 옷도 사이즈표 채우기: 상세 화면 버튼 · 설정에서 한꺼번에 */
 const isGenChart=c=>!!(c&&c.rows&&c.rows[0]&&c.rows[0][0]==="발 길이(mm)"&&c.rows.some(r=>r[0]==="JP(cm)"));
 const hasChart=it=>!!(it.chart&&it.chart.rows&&it.chart.rows.some(r=>r.slice(1).some(Boolean)));
-async function chartForItem(it,say){say=say||(()=>{});const st=shopStore();const tried=new Set();
+async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=shopStore();const tried=new Set();
   const okUrl2=u=>/^https?:/.test(u||"")&&!noFetch(u)&&!((st.terms[originOf(u)]||{}).result==="ban");
   const urls=(it.sellers||[]).map(x=>x.url).filter(okUrl2);
   /* 무신사 링크뿐이면: 등록된 공식몰에서 같은 상품 찾기 */
-  if(!urls.length&&it.brand&&it.name){const o=officialFromBR({ko:it.brand,en:it.brand});
+  const all=(it.sellers||[]).map(x=>x.url).filter(Boolean);if(!all.length)why.push("판매처 링크가 없어요");else if(!urls.length)why.push("판매처가 무신사처럼 앱이 읽을 수 없는 곳뿐이에요");
+  if(!urls.length&&it.brand&&it.name){const o=officialFromBR({ko:it.brand,en:it.brand});if(!o)why.push(`${it.brand} 공식몰이 아직 등록되지 않았어요`);
     if(o&&okUrl2(o)){say("공식몰에서 같은 상품 찾는 중…");let best=null;const q=shortQuery(it.name,it.brand)||it.name;
       try{for(const c of await searchShop(o,q)){const sc=Math.max(simName(it.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}}catch(e){}
+      if(!best)why.push("공식몰에서 같은 상품을 못 찾았어요");
       if(best){urls.push(best.url);if(!(it.sellers||[]).some(x=>x.url===best.url)){it.sellers=it.sellers||[];it.sellers.push({url:best.url,shop:new URL(o).hostname.replace(/^www\./,""),price:"",stock:null})}}}}
   let gen=null,stockKeys=new Set();(it.sellers||[]).forEach(x=>x.stock&&Object.keys(x.stock).forEach(k=>stockKeys.add(k)));
-  for(const u of urls){if(tried.has(u))continue;tried.add(u);say("쇼핑몰 페이지 읽는 중…");let P;try{P=await readProduct(u)}catch(e){continue}
+  for(const u of urls){if(tried.has(u))continue;tried.add(u);say("쇼핑몰 페이지 읽는 중…");let P;try{P=await readProduct(u)}catch(e){why.push(`${originOf(u).replace(/^https?:\/\/(www\.)?/,"")} 페이지를 못 읽었어요`);continue}
     if(P.stock)Object.keys(P.stock).forEach(k=>stockKeys.add(k));
     if(P.chart)return {chart:P.chart,how:"쇼핑몰 사이즈표"};
     if(P.detail&&P.detail.length&&OCR){say("상세 이미지에서 사이즈표 찾는 중…");try{const r=await chartFromDetail(P.detail);if(r)return {chart:r.chart,img:r.img,how:"상세 이미지"}}catch(e){}}}
   if(it.chartImg&&OCR){say("저장된 사이즈표 사진 읽는 중…");try{const r=await OCR.read({data:it.chartImg});const c=chartFromRows(wordsToRows(r.words));if(c&&c.rows.length)return {chart:c,how:"사이즈표 사진"}}catch(e){}}
   gen=shoeChart([...stockKeys]);if(gen)return {chart:gen,how:"사이즈 옵션(나라별 환산)",gen:true};
+  /* 신발: 쇼핑몰을 못 읽어도 일반 나라별 환산표 (내 사이즈 주변) */
+  const shoeLike=it.c==="shoes"||/^\d{3}$/.test(String(it.size||"").trim());
+  if(shoeLike&&typeof SIZE!=="undefined"){const K=SIZE.shoes.rows.KR;let i=K.indexOf(String(parseInt(it.size)||""));const a=i>=0?Math.max(0,i-3):2,b=Math.min(K.length,a+7);
+    gen=shoeChart(K.slice(a,b));if(gen)return {chart:gen,how:"일반 신발 환산표"+(why.length?" ("+why[0]+")":""),gen:true}}
   return null}
-async function fillChart(it,say){const r=await chartForItem(it,say);if(!r)return false;it.chart=r.chart;if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
+window.archiveChartForItem=(it,w)=>chartForItem(it,null,w);
+async function fillChart(it,say,why){const r=await chartForItem(it,say,why);if(!r)return false;it.chart=r.chart;if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
 if(typeof chartHTML==="function"){const _ch=chartHTML;chartHTML=function(it){let h=_ch(it);const need=!hasChart(it)||it.chartGen||isGenChart(it.chart);
   if(!need)return h;const btn=`<button type="button" class="altgo" id="dtChart" style="margin-top:8px">📏 사이즈표 ${hasChart(it)?"실측으로 다시 ":""}가져오기</button><p class="note" id="dtChartSt" hidden></p>`;
   if(!h)return `<div class="dsec"><h3>사이즈표</h3>${btn}</div>`;return h.replace(/<\/div>$/,btn+"</div>")};window.chartHTML=chartHTML}
 document.addEventListener("click",async e=>{const b=e.target.closest("#dtChart");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
   if(!NATIVE){toast("사이즈표 가져오기는 폰 앱에서 돼요");return}
   const st=$("dtChartSt");b.disabled=true;const say=t=>{if(st){st.hidden=false;st.innerHTML='<span class="spin"></span>'+escH(t)}};
-  const how=await fillChart(it,say);b.disabled=false;
-  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){st.textContent="쇼핑몰에서 사이즈표를 찾지 못했어요 · 판매처 링크를 추가하거나 사이즈표 사진을 넣어 보세요"}});
+  const why=[];const how=await fillChart(it,say,why);b.disabled=false;
+  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){st.textContent="사이즈표를 못 찾았어요 · "+(why.length?why.join(" · ")+" · ":"")+"카테고리를 신발로 고르거나, 판매처 링크 · 사이즈표 사진을 넣어 보세요"}});
 /* 설정: 사이즈표 없는 옷 한꺼번에 채우기 */
 function chartAllRow(){const g=$("gdAgain");if(!g||$("chartAll"))return;const r=document.createElement("button");r.type="button";r.className="row";r.id="chartAll";
   r.innerHTML='<span class="lb">사이즈표 없는 옷 채우기<small>이미 저장한 옷도 쇼핑몰 · 상세 이미지에서 사이즈표를 찾아 채워요</small></span><span class="val"></span>';g.after(r)}
