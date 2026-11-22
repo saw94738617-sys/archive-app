@@ -395,7 +395,7 @@ let inBk=false;const _pa=persistAll;persistAll=async function(){const r=await _p
 window.archiveGoogle={login:gLogin,upload:()=>uploadBackup(true),find:()=>findBackup(true)};
 async function askRestore(after){try{const f=await findBackup(true);if(!f){after&&after(false);return}
   const when=new Date(f.modifiedTime).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",hour12:false});
-  if(confirm(`드라이브에 ${when} 백업이 있어요 (${Math.round((+f.size||0)/1024)}KB).\n불러올까요? 지금 폰에 있는 기록은 백업 내용으로 바뀌어요.`)){const j=await restoreFromDrive(f);toast(`불러왔어요 · 옷 ${j.items.length}개`);after&&after(true)}else after&&after(false)}
+  if(confirm(`드라이브에 ${when} 백업이 있어요 (${Math.round((+f.size||0)/1024)}KB).\n불러올까요? 지금 폰에 있는 기록과 합쳐져요.`)){const j=await restoreFromDrive(f);toast(`불러왔어요 · 옷 ${j.items.length}개`);after&&after(true)}else after&&after(false)}
   catch(e){toast("백업을 확인하지 못했어요 · "+(e.message||e));after&&after(false)}}
 
 /* 설정 › 계정·백업 */
@@ -417,7 +417,7 @@ window.renderAcct=function(){const c=$("acctCard");if(!c)return;let last="";try{
   const L=$("gLogin2");if(L)L.onclick=async()=>{L.disabled=true;try{await gLogin();toast("로그인했어요");renderAcct();askRestore(ok=>{if(ok)location.reload();else uploadBackup(true).then(()=>{toast("드라이브에 백업했어요");renderAcct()}).catch(e=>toast("백업 실패 · "+(e.message||e)))})}catch(e){toast("로그인하지 못했어요 · "+(e.message||e))}finally{L.disabled=false}};
   const re=$("gRe");if(re)re.onclick=async()=>{try{await gToken(true);G.need=false;saveG();await uploadBackup(true);toast("다시 연결했어요");renderAcct()}catch(e){toast("연결하지 못했어요")}};
   const au=$("gAuto");if(au)au.onclick=()=>{G.auto=!(G.auto!==false);saveG();renderAcct()};
-  const nw=$("gNow");if(nw)nw.onclick=async()=>{nw.disabled=true;toast("백업 중…");try{await uploadBackup(true);G.err="";saveG();toast("드라이브에 백업했어요")}catch(e){G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"드라이브 백업",msg:G.err});toast("백업하지 못했어요 · "+G.err)}finally{nw.disabled=false;renderAcct()}};
+  const nw=$("gNow");if(nw)nw.onclick=async()=>{nw.disabled=true;toast("동기화 중…");try{await uploadBackup(true);G.err="";saveG();toast("동기화했어요")}catch(e){G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"드라이브 백업",msg:G.err});toast("백업하지 못했어요 · "+G.err)}finally{nw.disabled=false;renderAcct()}};
   const rs=$("gRestore");if(rs)rs.onclick=()=>askRestore(ok=>{if(ok)setTimeout(()=>location.reload(),800);else toast("불러오지 않았어요")});
   const out=$("gOut");if(out)out.onclick=async()=>{if(!confirm("로그아웃할까요? 폰 안 기록은 그대로 남아요."))return;try{await slInit();await SL.logout({provider:"google"})}catch(e){}G={};saveG();renderAcct();toast("로그아웃했어요")};
 };
@@ -597,7 +597,7 @@ const _obRender=window.obRender;if(typeof _obRender==="function"){window.obRende
 if($("ob")&&!$("ob").hidden&&typeof obRender==="function")obRender();
 renderAcct();
 /* 시작 */
-load().then(()=>{if(typeof renderAcct==="function")renderAcct();if(NATIVE){window.__lastUpdCheck=Date.now();setTimeout(()=>checkUpdate(false),1800);setTimeout(checkAlerts,4000)}});
+load().then(()=>{window.__archLoaded=true;if(typeof renderAcct==="function")renderAcct();if(NATIVE){window.__lastUpdCheck=Date.now();setTimeout(()=>checkUpdate(false),1800);setTimeout(checkAlerts,4000)}});
 
 /* ---------- 12) 기본 사용 가이드 (시작 화면 다음에 한 번, 설정에서 다시 보기) ---------- */
 const GA=(inner)=>`<svg viewBox="0 0 280 150" aria-hidden="true" font-family="Noto Sans KR,sans-serif">${inner}</svg>`;
@@ -746,4 +746,80 @@ bioCheck().then(()=>{bioKey();if(!$("lock").hidden&&lk.mode==="verify")bioUnlock
 let _bgAt=0;
 if(NATIVE&&AppP){AppP.addListener("pause",()=>{_bgAt=Date.now()});
   AppP.addListener("resume",()=>{if(sec.appLock&&sec.pin&&_bgAt&&Date.now()-_bgAt>60000&&$("lock").hidden)askPin("verify","비밀번호를 입력하세요",null,false);_bgAt=0})}
+
+/* ---------- 18) 여러 폰 동기화 (옷마다 고친 시간 비교해서 합치기) ---------- */
+const FP=new Map();let DELS={};try{DELS=JSON.parse(localStorage.getItem("archive-dels")||"{}")||{}}catch(e){}
+const saveDels=()=>{try{localStorage.setItem("archive-dels",JSON.stringify(DELS))}catch(e){}};
+function fpOf(it){const o=packItem(it);delete o.upd;delete o.brSeen;return JSON.stringify(o)}
+function idTime(id){const m=/^i([0-9a-z]{6,})$/.exec(id||"");if(!m)return 1;const t=parseInt(m[1],36);return t>1e12&&t<=Date.now()+864e5?t:1}
+function prefsStr(){try{return localStorage.getItem("archive-prefs")||"{}"}catch(e){return "{}"}}
+function prefsUpd(){return +(localStorage.getItem("archive-prefs-upd")||0)}
+function stampChanges(){const now=Date.now(),seen=new Set();
+  for(const it of ITEMS){seen.add(it.id);const f=fpOf(it),old=FP.get(it.id);
+    if(old===undefined){if(!it.upd)it.upd=(now-idTime(it.id)<6e4)?now:idTime(it.id)}
+    else if(old!==f)it.upd=now;
+    FP.set(it.id,f);if(DELS[it.id]&&DELS[it.id]<it.upd){delete DELS[it.id];saveDels()}}
+  for(const id of [...FP.keys()])if(!seen.has(id)){FP.delete(id);DELS[id]=now;saveDels()}
+  try{const p=prefsStr(),last=localStorage.getItem("archive-prefs-last");
+    if(last===null){localStorage.setItem("archive-prefs-last",p);if(!prefsUpd())localStorage.setItem("archive-prefs-upd","1")}
+    else if(last!==p){localStorage.setItem("archive-prefs-last",p);localStorage.setItem("archive-prefs-upd",String(now))}}catch(e){}}
+{const _pa3=persistAll;persistAll=async function(){try{stampChanges()}catch(e){}return _pa3.apply(this,arguments)}}
+/* 드라이브에 올리는 내용 (v2: 고친 시간 · 지운 기록 · 브랜드 포함) */
+buildBackup=async function(){await persistAll();let prefs={};try{prefs=JSON.parse(prefsStr())}catch(e){}
+  return JSON.stringify({app:"archive",v:2,at:new Date().toISOString(),items:ITEMS,dels:DELS,prefs,prefsUpd:prefsUpd(),brands:(typeof BR!=="undefined"?{brands:BR.brands,shops:BR.shops}:null)})};
+function mergeBR(rb){if(!rb||typeof BR==="undefined")return false;let ch=false;
+  for(const kind of ["brands","shops"])for(const x of (rb[kind]||[])){const mine=brFind(BR[kind],x.name);
+    if(!mine){BR[kind].push(JSON.parse(JSON.stringify(x)));ch=true;continue}
+    for(const l of (x.links||[]))if(!(mine.links=mine.links||[]).some(y=>y.url===l.url)){mine.links.push(l);ch=true}
+    const tk=kind==="brands"?"shops":"brands";for(const t of (x[tk]||[]))if(!(mine[tk]=mine[tk]||[]).some(y=>brKey(y)===brKey(t))){mine[tk].push(t);ch=true}}
+  if(ch){saveBR();if($("brandsPanel")&&$("brandsPanel").classList.contains("on"))renderBR()}return ch}
+function mergeRemote(R){const out={added:0,changed:0,removed:0,prefs:false};if(!R||R.app!=="archive"||!Array.isArray(R.items))return out;
+  stampChanges();
+  for(const [id,t] of Object.entries(R.dels||{}))if(!DELS[id]||DELS[id]<t)DELS[id]=t;
+  const loc=new Map(ITEMS.map(x=>[x.id,x]));const fresh=[];
+  for(const r of R.items){const ru=+r.upd||0,l=loc.get(r.id);
+    if(DELS[r.id]&&DELS[r.id]>=ru)continue;
+    if(!l){fresh.push(r);continue}
+    if(ru>(+l.upd||0)){Object.keys(l).forEach(k=>delete l[k]);Object.assign(l,r);out.changed++}}
+  fresh.sort((a,b)=>(b.upd||0)-(a.upd||0));if(fresh.length){ITEMS.unshift(...fresh);out.added=fresh.length}
+  for(let i=ITEMS.length-1;i>=0;i--){const it=ITEMS[i];if(DELS[it.id]&&DELS[it.id]>=(+it.upd||0)){ITEMS.splice(i,1);out.removed++}}
+  for(const id of Object.keys(DELS))if(!ITEMS.some(x=>x.id===id)&&!FP.has(id)){}
+  saveDels();FP.clear();ITEMS.forEach(it=>FP.set(it.id,fpOf(it)));
+  if((+R.prefsUpd||0)>prefsUpd()&&R.prefs){try{const cur=JSON.parse(prefsStr());const np=JSON.stringify({...R.prefs,onboarded:cur.onboarded||R.prefs.onboarded});
+    if(np!==prefsStr()){localStorage.setItem("archive-prefs",np);localStorage.setItem("archive-prefs-last",np);localStorage.setItem("archive-prefs-upd",String(R.prefsUpd));out.prefs=true}}catch(e){}}
+  mergeBR(R.brands);return out}
+let syncing=null;
+async function syncNow(interactive){if(syncing)return syncing;syncing=(async()=>{
+  let f=await findBackup(interactive);let res={added:0,changed:0,removed:0,prefs:false};
+  if(f&&f.modifiedTime!==G.syncMod){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},interactive);let R=null;try{R=await r.json()}catch(e){}
+    if(R){res=mergeRemote(R);if(res.added||res.changed||res.removed){if(typeof renderPins==="function")renderPins();if(typeof updateCounts==="function")updateCounts();if(typeof buildTree==="function")buildTree()}}}
+  inBk=true;let json;try{json=await buildBackup()}finally{inBk=false}
+  const h=hashStr(json);
+  if(h!==G.lastHash||!f){
+    if(!f){const r=await drive("drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},data:{name:BKNAME,parents:["appDataFolder"],mimeType:"application/json"}},interactive);f=await r.json();if(!f||!f.id)throw new Error("드라이브에 파일을 만들지 못했어요")}
+    const u=await drive(`upload/drive/v3/files/${f.id}?uploadType=media&fields=id,size,modifiedTime`,{method:"PATCH",headers:{"Content-Type":"application/json"},data:json},interactive);
+    let uj={};try{uj=await u.json()}catch(e){}G.syncMod=uj.modifiedTime||"";G.lastHash=h}
+  else G.syncMod=f.modifiedTime;
+  G.last=stamp();G.need=false;G.err="";saveG();
+  devLog({k:"ok",host:"동기화",msg:`옷 ${ITEMS.length}개 · 받음 +${res.added} ~${res.changed} -${res.removed}`});
+  if(res.added||res.changed||res.removed)toast(`다른 폰 기록을 합쳤어요 · ${[res.added&&`새 옷 ${res.added}`,res.changed&&`바뀐 옷 ${res.changed}`,res.removed&&`지운 옷 ${res.removed}`].filter(Boolean).join(" · ")}`);
+  if(res.prefs)toast("다른 폰에서 바꾼 설정은 앱을 다시 열면 적용돼요");
+  if(typeof renderAcct==="function"&&$("acctCard"))renderAcct();return "ok"})();
+  try{return await syncing}finally{syncing=null}}
+uploadBackup=syncNow;
+/* 드라이브에서 불러오기도 '바꾸기' 대신 '합치기'로 (지금 폰 기록이 사라지지 않게) */
+restoreFromDrive=async function(f){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},true);const R=await r.json();if(R.app!=="archive"||!Array.isArray(R.items))throw new Error("백업 파일이 아니에요");
+  mergeRemote(R);G.syncMod="";saveG();if(typeof renderPins==="function")renderPins();await persistAll();return {items:ITEMS}};
+window.archiveSync=syncNow;
+/* 앱을 열 때 · 돌아올 때(2분 간격) 동기화 */
+let lastSyncTry=0;function syncSoon(){if(!window.__archLoaded){setTimeout(syncSoon,1000);return}if(!G.on||G.auto===false||!gAvailable())return;if(Date.now()-lastSyncTry<12e4)return;lastSyncTry=Date.now();
+  syncNow(false).catch(e=>{G.err=String(e.message||e).slice(0,120);saveG();devLog({k:"fail",host:"동기화",msg:G.err})})}
+setTimeout(syncSoon,3500);
+if(NATIVE&&AppP)AppP.addListener("resume",()=>setTimeout(syncSoon,800));
+/* 계정 카드 글자: 백업 → 동기화 */
+{const _ra=window.renderAcct;window.renderAcct=function(){const r=_ra.apply(this,arguments);try{const c=$("acctCard");if(c&&G.on){
+  const sw=c.querySelector("#gAuto");if(sw){const lb=sw.closest(".row").querySelector(".lb");lb.innerHTML="자동 동기화<small>기록을 바꾸면 잠시 뒤 드라이브와 맞춰요 · 다른 폰도 같은 계정이면 합쳐져요</small>"}
+  const nw=$("gNow");if(nw)nw.querySelector(".lb").innerHTML=`지금 동기화<small>옷 ${ITEMS.length}개 · 마지막 ${escH(G.last||"아직 없음")}</small>`;
+  const st=c.querySelector(".acctme small");if(st&&!G.need)st.textContent=`● 동기화 켜짐 · 마지막 ${G.last||"아직 없음"}`;
+  const n=$("acctNote");if(n)n.textContent="기록은 내 Google 드라이브의 앱 전용 공간에서 동기화돼요. 안드로이드 · 아이폰 어디서든 같은 Google 계정으로 로그인하면 옷마다 가장 최근에 고친 내용으로 합쳐져요."}}catch(e){}return r}}
 })();
