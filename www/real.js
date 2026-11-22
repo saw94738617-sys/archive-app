@@ -484,32 +484,12 @@ function askShop(){const u=prompt("판매처 몰 주소를 넣어주세요 (예:
   const st=shopStore();if(!st.add.includes(o))st.add.push(o);st.off=(st.off||[]).filter(x=>x!==o);shopSave(st);toast("몰을 추가했어요 · 다음 검색부터 여기서도 찾아요");return true}
 window.archiveFindOthers=findOthers;
 
-/* 기록 화면: 판매처 칸에 찾기 */
-let altRes=null;
-function ensureAltBox(){if($("altBox"))return;const nv=$("naverBtn");if(!nv)return;const d=document.createElement("div");d.id="altBox";d.className="altbox";
-  d.innerHTML='<button type="button" class="altgo" id="altGo">🔎 내 몰들에서 다른 판매처 찾기</button><div id="altOut"></div>';nv.parentElement.insertBefore(d,nv)}
-async function runAltRec(){if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return}ensureAltBox();const name=$("fName").value.trim();if(!name){toast("이름이 있어야 찾을 수 있어요");return}
-  $("altOut").innerHTML='<p class="altnone"><span class="spin"></span>다른 판매처 찾는 중…</p>';
-  altRes=await findOthers(name,$("fBrand").value.trim(),recSellers.map(x=>x.url),(d,t)=>{const p=$("altOut").querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>다른 판매처 찾는 중… ${d}/${t}`});
-  $("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url))}
-document.addEventListener("click",e=>{
-  if(e.target.closest("#altGo")){runAltRec();return}
-  const ad=e.target.closest("#altOut [data-alt]");if(ad&&altRes){const f=altRes.found[+ad.dataset.alt];if(f&&addSeller(f.url)){const sl=recSellers.find(x=>x.url===f.url);if(sl){sl.shop=f.shop;sl.price=f.price;if(f.stock){sl.stock=f.stock;sl.checked=stamp()}}renderSellers()}$("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url));return}
-  if(e.target.closest("#altOut [data-altshop]")){if(askShop())runAltRec();return}
-});
-if(NATIVE){const _rf=realFetch;realFetch=async function(){await _rf();try{ensureAltBox();if($("fName").value.trim()&&shopOrigins(recSellers.map(x=>x.url)).length)runAltRec()}catch(e){}};$("fetchBtn").onclick=realFetch}
-const _rs4=renderSellers;renderSellers=function(){_rs4();ensureAltBox()};
-
-/* 상세 화면: 다른 판매처 찾기 */
-document.addEventListener("click",e=>{const b=e.target.closest("#dtAlt");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return}
-  let res=null;const added=[];
-  openEd("다른 판매처 찾기",()=>{$("edBody").innerHTML=`<p class="note">${escH((it.brand?it.brand+" ":"")+it.name)}</p><div id="altOut2"><p class="altnone"><span class="spin"></span>찾는 중…</p></div>`;
-    const paint=()=>{$("altOut2").innerHTML=altHTML(res,(it.sellers||[]).map(x=>x.url))};
-    const run=async()=>{res=await findOthers(it.name,it.brand,(it.sellers||[]).map(x=>x.url),(d,t)=>{const p=$("altOut2").querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>찾는 중… ${d}/${t}`});paint()};
-    $("altOut2").onclick=ev=>{const ad=ev.target.closest("[data-alt]");if(ad&&res){const f=res.found[+ad.dataset.alt];it.sellers=it.sellers||[];if(!it.sellers.some(x=>x.url===f.url)){it.sellers.push({url:f.url,shop:f.shop,price:f.price,stock:f.stock||null,checked:f.stock?stamp():""});added.push(f.url);persistAll();toast(f.shop+" 추가했어요")}paint();return}
-      if(ev.target.closest("[data-altshop]")){if(askShop()){$("altOut2").innerHTML='<p class="altnone"><span class="spin"></span>찾는 중…</p>';run()}}};
-    run()},()=>{reDetail()})},true);
-const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="＋ 판매처 찾기";h.appendChild(b)}}catch(e){}};
+/* 다른 판매처: 앱이 여러 쇼핑몰에 자동으로 접속하지 않고, 네이버 쇼핑 검색을 열어서 내가 직접 고르기 */
+function naverShopUrl(q){return "https://search.shopping.naver.com/search/all?query="+encodeURIComponent(q)}
+document.addEventListener("click",e=>{const b=e.target.closest("#dtAlt");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
+  const q=[it.brand,it.name].filter(Boolean).join(" ").trim();if(!q){toast("이름이 있어야 찾을 수 있어요");return}
+  window.open(naverShopUrl(q),"_blank","noopener");toast("마음에 드는 판매처 링크를 복사해서 '수정 › 판매처'에 붙여넣어 주세요")},true);
+const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="네이버에서 찾기 ↗";h.appendChild(b)}}catch(e){}};
 
 /* ---------- 11) 세부 카테고리 바로 추가 · 위시 순위 기본값 ---------- */
 function paintSubAdd(){const sc=$("subcats");if(!sc||sc.hidden||sc.querySelector(".subadd"))return;const b=document.createElement("button");b.type="button";b.className="subadd";b.textContent="＋ 직접 추가";sc.appendChild(b)}
@@ -610,7 +590,7 @@ load().then(()=>{window.__archLoaded=true;if(typeof renderAcct==="function")rend
 const GA=(inner)=>`<svg viewBox="0 0 280 150" aria-hidden="true" font-family="Noto Sans KR,sans-serif">${inner}</svg>`;
 const GUIDE=[
  {t:"링크 하나로 옷을 기록해요",art:GA(`<rect x="8" y="10" width="264" height="36" rx="10" fill="#1f2a44"/><rect x="18" y="18" width="180" height="20" rx="6" fill="#fff"/><text x="26" y="32" font-size="10" fill="#6b6a63">https://shop.com/products/…</text><rect x="206" y="18" width="56" height="20" rx="6" fill="#f0a35e"/><text x="234" y="32" font-size="10" font-weight="700" fill="#1f2a44" text-anchor="middle">가져오기</text><path d="M140 52v12" stroke="#c8622d" stroke-width="2" stroke-dasharray="3 3"/><rect x="40" y="70" width="70" height="72" rx="10" fill="#4a4f47"/><text x="75" y="111" font-size="10" fill="#e5dfcf" text-anchor="middle">사진</text><rect x="122" y="72" width="120" height="10" rx="4" fill="#1f2a44"/><rect x="122" y="90" width="70" height="8" rx="4" fill="#c8622d"/><rect x="122" y="106" width="118" height="30" rx="6" fill="#f3efe4"/><text x="181" y="125" font-size="9" fill="#6b6a63" text-anchor="middle">사이즈표 · 재고</text>`),
-  li:["오른쪽 위 <b>＋</b>를 누르고 쇼핑몰 링크를 붙여넣어요","사진 · 이름 · 가격 · <b>사이즈표 · 재고</b>를 알아서 가져와요","같은 옷을 파는 <b>다른 판매처</b>도 찾아서 보여줘요","산 옷은 <b>아카이브</b>, 갖고 싶은 옷은 <b>위시</b>로 골라서 저장해요"]},
+  li:["오른쪽 위 <b>＋</b>를 누르고 쇼핑몰 링크를 붙여넣어요","사진 · 이름 · 가격 · <b>사이즈표 · 재고</b>를 알아서 가져와요 · 무신사 · 29CM는 약관상 링크와 이름만","다른 판매처는 <b>네이버 쇼핑에서 찾아보기</b>로 직접 고르고 링크를 추가해요","산 옷은 <b>아카이브</b>, 갖고 싶은 옷은 <b>위시</b>로 골라서 저장해요"]},
  {t:"위시는 순위로 정리돼요",art:GA(`${[1,3,5].map((n,i)=>`<g transform="translate(${14+i*88} 12)"><rect width="78" height="104" rx="12" fill="${i?"#4a4f47":"#2c302b"}"/><rect x="6" y="6" width="58" height="16" rx="8" fill="#c8622d"/><text x="35" y="18" font-size="9" font-weight="700" fill="#fff" text-anchor="middle">WISH · ${n}순위</text><rect x="4" y="112" width="50" height="8" rx="4" fill="#1f2a44"/></g>`).join("")}<text x="140" y="146" font-size="10" fill="#6b6a63" text-anchor="middle">1순위부터 차례대로 보여요</text>`),
   li:["위시를 기록할 때 <b>1~5순위</b>를 골라요 · 1순위가 제일 갖고 싶은 거예요","위시리스트는 <b>1순위부터</b> 정렬돼서 보여요","순위는 옷을 열고 <b>편집</b>에서 언제든 바꿔요","위시 옷을 사면 <b>샀어요</b>를 눌러 아카이브로 옮겨요"]},
  {t:"메뉴는 밀어서 열고 닫아요",art:GA(`<rect x="0" y="0" width="280" height="150" rx="12" fill="#f3efe4"/><rect x="0" y="0" width="150" height="150" rx="12" fill="#1f2a44"/><text x="16" y="26" font-size="11" font-weight="700" fill="#f0a35e">아카이브</text><text x="26" y="46" font-size="10" fill="#e5dfcf">상의</text><text x="26" y="64" font-size="10" fill="#e5dfcf">하의</text><text x="40" y="80" font-size="9" fill="#aab0bd">데님 · 치노 · 슬랙스</text><text x="16" y="104" font-size="11" font-weight="700" fill="#f0a35e">위시리스트</text><text x="26" y="124" font-size="10" fill="#e5dfcf">신발</text><path d="M180 75h70" stroke="#c8622d" stroke-width="2.5" marker-end="url(#ga)"/><defs><marker id="ga" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#c8622d"/></marker></defs><text x="215" y="66" font-size="10" fill="#1f2a44" text-anchor="middle">밀어서 열기</text>`),
