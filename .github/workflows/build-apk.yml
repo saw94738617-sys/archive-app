@@ -125,7 +125,7 @@ jobs:
       - name: 업데이트 내용 정리
         if: env.DEPLOY == 'true'
         run: |
-          git log -1 --pretty=%B | grep -v -E "Co-Authored-By|Claude-Session|^\s*$" > notes.md || true
+          git log -1 --pretty=%B | grep -v -E "Co-Authored-By|Claude-Session|^\s*$" | grep -v -F "[배포]" > notes.md || true
           printf '\n폰에서 이 페이지를 열고 APK를 눌러 설치하세요. 덮어 설치하면 기록은 그대로 남아요.\n- archive-dev-*.apk : 내 폰용 (개발자 메뉴 있음)\n- archive-*.apk : 일반 버전\n' >> notes.md
           cat notes.md
 
