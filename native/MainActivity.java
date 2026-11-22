@@ -80,6 +80,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             CharSequence t = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
             String sub = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+            if (sub == null || sub.isEmpty()) { CharSequence ti = intent.getCharSequenceExtra(Intent.EXTRA_TITLE); if (ti != null) sub = ti.toString(); }
             if (t != null && t.length() > 0) {
                 getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit()
                     .putString("share", t.toString()).putString("shareSub", sub == null ? "" : sub).apply();

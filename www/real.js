@@ -905,7 +905,13 @@ const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net)$/i;
 const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM"};
 function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
 function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
-function nameFromShare(t){t=String(t||"");const i=t.search(/https?:\/\//i);let s=(i>0?t.slice(0,i):"").replace(/^\s*\[[^\]]{1,15}\]\s*/,"").replace(/\s+/g," ").trim();return s.length>=2&&s.length<=120?s:""}
+function nameFromShare(t){t=String(t||"");
+  const clean=x=>x.replace(/^\s*\[[^\]]{1,15}\]\s*/,"").replace(/\s+/g," ").trim();
+  const boiler=/^(무신사|musinsa|29cm|무신사 ?스토어)$|확인해 ?보세요|확인하세요|공유|추천|구경|앱에서|다운로드|자세히 보기|지금 바로/i;
+  const ok=x=>x.length>=2&&x.length<=120&&!boiler.test(x)&&/[가-힣A-Za-z]/.test(x);
+  const i=t.search(/https?:\/\//i);const pre=clean(i>0?t.slice(0,i):"");if(ok(pre))return pre;
+  const parts=t.replace(/https?:\/\/\S+/gi,"\n").split(/\n+/).map(clean).filter(ok);
+  return parts.sort((a,b)=>b.length-a.length)[0]||""}
 {const _rp2=readProduct;readProduct=async function(url){url=canon(url);const _st=shopStore(),_o=originOf(url);if(_st.terms[_o]&&_st.terms[_o].result==="ban"){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
 window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
 
@@ -982,12 +988,16 @@ if(NATIVE){const go=()=>{if(!window.__archLoaded){setTimeout(go,500);return}pull
   if(AppP)AppP.addListener("resume",()=>setTimeout(()=>pullWatch(),300))}
 document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setTimeout(()=>{lastWatch="";pushWatch()},100)});
 /* 다른 앱에서 '공유 → 아카이브': 위시로 기록 화면을 열고 공유받은 제목 · 링크로 채워요 (공식몰이 있으면 거기서 가져와요) */
-function fromShare(text,sub){text=String(text||"");sub=String(sub||"").trim();
+async function fromShare(text,sub){text=String(text||"");sub=String(sub||"").trim();
   const raw=sub&&!text.includes(sub)&&/https?:\/\//i.test(text)&&!nameFromShare(text)?sub+" "+text:text;
   openRec();setKind("wish");
   const u=pickUrl(raw);
+  try{localStorage.setItem("archive-lastshare",JSON.stringify({text,sub,at:Date.now()}))}catch(e){}
+  devLog({k:"share",msg:(sub?"제목: "+sub+" / ":"")+text.slice(0,300)});
   if(!okUrl(u)){const nm=raw.replace(/\s+/g," ").trim().slice(0,120);if(nm)$("fName").value=nm;$("fetchStatus").textContent="공유받은 글에 링크가 없어서 이름만 넣었어요";return}
-  $("fLink").value=raw;realFetch()}
+  $("fLink").value=raw;await realFetch();
+  if(!nameFromShare(raw)){const st=$("fetchStatus");const p=document.createElement("small");p.className="sharegot";
+    p.textContent="공유로 받은 글: "+(sub?sub+" · ":"")+text.replace(/\s+/g," ").slice(0,160);st.appendChild(p)}}
 window.archiveShare=fromShare;
 window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&NTP.alertsNow&&NTP.alertsNow()};
 
