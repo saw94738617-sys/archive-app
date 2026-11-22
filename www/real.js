@@ -176,7 +176,11 @@ async function realFetch(){
   if(!okUrl(v)){$("fetchStatus").textContent="https:// 로 시작하는 쇼핑몰 링크를 붙여넣어 주세요.";return}
   $("fetchStatus").innerHTML='<span class="spin"></span>상품 페이지 읽는 중…';$("fetchBtn").disabled=true;
   try{
-    try{v=await resolveLink(v)}catch(e){}
+    const raw=$("fLink").value;try{v=await resolveLink(v)}catch(e){}
+    if(noFetch(v)){addSeller(v);const s0=recSellers.find(x=>x.url===v);if(s0){s0.shop=noFetchShop(v)||s0.shop;renderSellers()}
+      const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
+      $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
+      $("fLink").value="";return}
     const P=await readProduct(v);
     addSeller(v);const s=recSellers.find(x=>x.url===v);
     if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stock){s.stock=P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
@@ -843,13 +847,12 @@ async function resolveLink(u){u=canon(u);let host="";try{host=new URL(u).hostnam
   if(finalUrl&&/^https?:/.test(finalUrl)&&!SHORT.test(new URL(finalUrl).hostname))return canon(finalUrl);
   const og=body.match(/property=["']og:url["'][^>]*content=["']([^"']+)/i);if(og)return canon(og[1]);
   return u}
-async function musinsaChart(id){try{const t=await getText(`https://goods-detail.musinsa.com/api2/goods/${id}/actual-size`);const j=JSON.parse(t);const S=(j&&j.data&&j.data.sizes)||[];if(!S.length)return null;
-  const labels=[];S.forEach(s=>(s.items||[]).forEach(i=>{if(!labels.includes(i.name))labels.push(i.name)}));
-  const fmt=v=>v==null||v===""?"":String(+v%1?(+v).toFixed(1):+v);
-  return {cols:S.map(s=>String(s.name).toUpperCase()),rows:labels.map(l=>[l,...S.map(s=>{const it=(s.items||[]).find(i=>i.name===l);return it?fmt(it.value):""})])}}catch(e){devLog({k:"fail",host:"musinsa.com",msg:"실측표: "+(e.message||e)});return null}}
-{const _rp2=readProduct;readProduct=async function(url){url=canon(url);const P=await _rp2(url);const id=musinsaId(url);
-  if(id){P.shop="무신사";if(!P.chart){const c=await musinsaChart(id);if(c){P.chart=c;P.src.push("무신사 실측")}}
-    P.name=P.name.replace(/\s*-\s*사이즈\s*&\s*후기\s*\|\s*무신사$/,"").trim()}
-  return P};window.archiveReadProduct=readProduct}
+/* 약관에서 자동 수집을 금지한 사이트: 앱이 페이지에 접속하지 않아요 (링크 · 공유 문구의 이름만 저장) */
+const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net)$/i;
+const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM"};
+function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
+function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
+function nameFromShare(t){t=String(t||"");const i=t.search(/https?:\/\//i);let s=(i>0?t.slice(0,i):"").replace(/^\s*\[[^\]]{1,15}\]\s*/,"").replace(/\s+/g," ").trim();return s.length>=2&&s.length<=120?s:""}
+{const _rp2=readProduct;readProduct=async function(url){url=canon(url);if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
 window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
 })();
