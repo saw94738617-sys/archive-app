@@ -437,6 +437,73 @@ if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{G.err="";saveG();i
     if(dx>0&&!isOpen())setMenu(true);else if(dx<0&&isOpen())setMenu(false)},{passive:true});
 })();
 
+/* ---------- 10) 다른 판매처 찾기 (내가 쓰는 몰 안에서 검색) ---------- */
+const SHOPK="archive-shops";
+const BIG=/(^|\.)(naver\.com|coupang\.com|musinsa\.com|29cm\.co\.kr|wconcept\.co\.kr|kream\.co\.kr|ssfshop\.com|zozo\.jp|amazon\.|rakuten\.co\.jp|google\.)/;
+function shopStore(){try{return JSON.parse(localStorage.getItem(SHOPK)||'{"add":[],"off":[]}')}catch(e){return {add:[],off:[]}}}
+function shopSave(v){try{localStorage.setItem(SHOPK,JSON.stringify(v))}catch(e){}}
+const originOf=u=>{try{const x=new URL(u);return x.origin}catch(e){return ""}};
+function shopOrigins(excl){const st=shopStore(),set=new Set();
+  ITEMS.forEach(it=>(it.sellers||[]).forEach(sl=>{const o=originOf(sl.url);if(o)set.add(o)}));
+  (st.add||[]).forEach(o=>set.add(o));
+  const ex=new Set((excl||[]).map(originOf));
+  return [...set].filter(o=>!ex.has(o)&&!(st.off||[]).includes(o)&&!BIG.test(new URL(o).hostname))}
+const normN=t=>String(t||"").toLowerCase().replace(/[^0-9a-z가-힣]+/g," ").trim();
+const toks=t=>normN(t).split(" ").filter(w=>w.length>=2);
+function simName(a,b){const A=toks(a),B=new Set(toks(b));if(!A.length)return 0;return A.filter(w=>B.has(w)).length/A.length}
+function shortQuery(name,brand){let n=String(name||"").replace(/\(.*?\)|\[.*?\]/g," ");const bt=new Set(toks(brand));const w=toks(n).filter(x=>!bt.has(x));return w.slice(0,3).join(" ")}
+async function searchShop(origin,q){const enc=encodeURIComponent(q);
+  try{const t=await getText(`${origin}/search/suggest.json?q=${enc}&resources[type]=product&resources[limit]=6`);const j=JSON.parse(t);
+    const ps=(((j||{}).resources||{}).results||{}).products||[];if(Array.isArray(ps))return ps.map(p=>({name:p.title,url:absUrl(String(p.url||"").split("?")[0],origin)})).filter(p=>p.url)}catch(e){}
+  try{const html=await getText(`${origin}/product/search.html?keyword=${enc}`);const doc=new DOMParser().parseFromString(html,"text/html");const seen=new Set(),out=[];
+    doc.querySelectorAll('a[href*="product_no="],a[href*="/product/"]').forEach(a=>{const href=a.getAttribute("href")||"";const m=href.match(/product_no=(\d+)/)||href.match(/\/product\/[^/]+\/(\d+)\//);if(!m||seen.has(m[1]))return;
+      const box=a.closest("li")||a.parentElement;let nm=(box&&box.querySelector(".name,.prdName,.item_name,[class*=name]"))?box.querySelector(".name,.prdName,.item_name,[class*=name]").textContent:"";nm=clean(nm.replace(/상품명\s*:/,""))||clean(a.textContent)||((a.querySelector("img")||{}).alt||"");
+      if(!nm)return;seen.add(m[1]);out.push({name:nm,url:absUrl(href,origin)})});
+    return out.slice(0,10)}catch(e){}
+  return []}
+async function findOthers(name,brand,exclUrls,onProg){const origins=shopOrigins(exclUrls).slice(0,15);const q=shortQuery(name,brand)||normN(name);const found=[];let done=0;
+  const work=async o=>{try{const list=await searchShop(o,q);let best=null;for(const c of list){const sc=simName(name,c.name);if(sc>=0.5&&(!best||sc>best.score))best={...c,score:sc}}
+      if(best){let P=null;try{P=await readProduct(best.url)}catch(e){}
+        found.push({url:best.url,shop:(P&&P.shop&&P.shop.length<20?P.shop:shopOf(best.url)),name:(P&&P.name)||best.name,price:P?fmtPrice(P.price,P.currency):"",stock:P?P.stock:null,score:best.score})}}
+    catch(e){}finally{done++;onProg&&onProg(done,origins.length,found)}};
+  const queue=[...origins];await Promise.all([0,1,2].map(async()=>{while(queue.length)await work(queue.shift())}));
+  devLog({k:"ok",host:"다른 판매처 찾기",msg:`"${q}" · ${origins.length}곳 검색 · ${found.length}곳 찾음`});
+  return {origins,found:found.sort((a,b)=>b.score-a.score),q}}
+function stockLine(st){return st?Object.entries(st).map(([k,v])=>k+(v==="in"?"✓":v==="out"?"✕":"?")).join(" "):""}
+function altHTML(res,addedUrls){const names=res.origins.map(o=>new URL(o).hostname.replace(/^www\./,""));
+  return `${res.found.length?res.found.map((f,i)=>`<div class="altr"><div class="altn"><b>${escH(f.shop)}</b><small>${escH(f.name)}</small>${f.stock?`<small class="alts">${escH(stockLine(f.stock))}</small>`:""}</div><span class="altp">${escH(f.price||"")}</span>${addedUrls.includes(f.url)?`<span class="altok">추가됨</span>`:`<button type="button" class="altadd" data-alt="${i}">＋ 추가</button>`}</div>`).join(""):`<p class="altnone">${res.origins.length?"내 몰들에서 같은 상품을 못 찾았어요":"아직 찾아볼 몰이 없어요"}</p>`}
+    <p class="altfoot">찾아본 몰 ${res.origins.length}곳${names.length?" · "+escH(names.slice(0,4).join(", "))+(names.length>4?" 외":""):""} · 검색어 "${escH(res.q)}" <button type="button" class="altshop" data-altshop>몰 추가</button></p>`}
+function askShop(){const u=prompt("판매처 몰 주소를 넣어주세요 (예: https://havati.co.kr)");if(!u)return false;const o=originOf(/^https?:/.test(u)?u:"https://"+u);if(!o){toast("주소를 확인해 주세요");return false}
+  const st=shopStore();if(!st.add.includes(o))st.add.push(o);st.off=(st.off||[]).filter(x=>x!==o);shopSave(st);toast("몰을 추가했어요 · 다음 검색부터 여기서도 찾아요");return true}
+window.archiveFindOthers=findOthers;
+
+/* 기록 화면: 판매처 칸에 찾기 */
+let altRes=null;
+function ensureAltBox(){if($("altBox"))return;const nv=$("naverBtn");if(!nv)return;const d=document.createElement("div");d.id="altBox";d.className="altbox";
+  d.innerHTML='<button type="button" class="altgo" id="altGo">🔎 내 몰들에서 다른 판매처 찾기</button><div id="altOut"></div>';nv.parentElement.insertBefore(d,nv)}
+async function runAltRec(){if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return}ensureAltBox();const name=$("fName").value.trim();if(!name){toast("이름이 있어야 찾을 수 있어요");return}
+  $("altOut").innerHTML='<p class="altnone"><span class="spin"></span>다른 판매처 찾는 중…</p>';
+  altRes=await findOthers(name,$("fBrand").value.trim(),recSellers.map(x=>x.url),(d,t)=>{const p=$("altOut").querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>다른 판매처 찾는 중… ${d}/${t}`});
+  $("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url))}
+document.addEventListener("click",e=>{
+  if(e.target.closest("#altGo")){runAltRec();return}
+  const ad=e.target.closest("#altOut [data-alt]");if(ad&&altRes){const f=altRes.found[+ad.dataset.alt];if(f&&addSeller(f.url)){const sl=recSellers.find(x=>x.url===f.url);if(sl){sl.shop=f.shop;sl.price=f.price;if(f.stock){sl.stock=f.stock;sl.checked=stamp()}}renderSellers()}$("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url));return}
+  if(e.target.closest("#altOut [data-altshop]")){if(askShop())runAltRec();return}
+});
+if(NATIVE){const _rf=realFetch;realFetch=async function(){await _rf();try{ensureAltBox();if($("fName").value.trim()&&shopOrigins(recSellers.map(x=>x.url)).length)runAltRec()}catch(e){}};$("fetchBtn").onclick=realFetch}
+const _rs4=renderSellers;renderSellers=function(){_rs4();ensureAltBox()};
+
+/* 상세 화면: 다른 판매처 찾기 */
+document.addEventListener("click",e=>{const b=e.target.closest("#dtAlt");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return}
+  let res=null;const added=[];
+  openEd("다른 판매처 찾기",()=>{$("edBody").innerHTML=`<p class="note">${escH((it.brand?it.brand+" ":"")+it.name)}</p><div id="altOut2"><p class="altnone"><span class="spin"></span>찾는 중…</p></div>`;
+    const paint=()=>{$("altOut2").innerHTML=altHTML(res,(it.sellers||[]).map(x=>x.url))};
+    const run=async()=>{res=await findOthers(it.name,it.brand,(it.sellers||[]).map(x=>x.url),(d,t)=>{const p=$("altOut2").querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>찾는 중… ${d}/${t}`});paint()};
+    $("altOut2").onclick=ev=>{const ad=ev.target.closest("[data-alt]");if(ad&&res){const f=res.found[+ad.dataset.alt];it.sellers=it.sellers||[];if(!it.sellers.some(x=>x.url===f.url)){it.sellers.push({url:f.url,shop:f.shop,price:f.price,stock:f.stock||null,checked:f.stock?stamp():""});added.push(f.url);persistAll();toast(f.shop+" 추가했어요")}paint();return}
+      if(ev.target.closest("[data-altshop]")){if(askShop()){$("altOut2").innerHTML='<p class="altnone"><span class="spin"></span>찾는 중…</p>';run()}}};
+    run()},()=>{reDetail()})},true);
+const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="＋ 판매처 찾기";h.appendChild(b)}}catch(e){}};
+
 /* ---------- 7) 앱 업데이트 확인 ---------- */
 const REPO="saw94738617-sys/archive-app";
 const BUILD=+(window.ARCHIVE_BUILD||0);
