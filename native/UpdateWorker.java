@@ -55,6 +55,49 @@ public class UpdateWorker extends Worker {
         return true;
     }
 
+    /** 새 버전 알림을 알림바에 띄워요 (1시간 확인 · 푸시 둘 다 여기로 와요). */
+    static boolean notifyUpdate(Context ctx, long n, String tag, String rawBody, String via) {
+        try {
+            long cur = PackageInfoCompat.getLongVersionCode(ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0));
+            SharedPreferences sp = ctx.getSharedPreferences("archive_update", Context.MODE_PRIVATE);
+            if (n <= cur) { mark(ctx, "최신 버전이에요 (" + via + ")"); return false; }
+            if (n <= sp.getLong("notified", 0)) { mark(ctx, "0.1." + n + " 알림은 이미 보냈어요"); return false; }
+            String body = "눌러서 업데이트하세요";
+            for (String s : (rawBody == null ? "" : rawBody).split("\n")) {
+                s = s.trim();
+                if (s.isEmpty() || s.contains("APK") || s.contains("archive-") || s.startsWith("폰에서") || s.startsWith("Co-Authored") || s.startsWith("Claude-Session")) continue;
+                body = s.replaceFirst("^[-*]\\s*", ""); break;
+            }
+            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                mark(ctx, "새 버전이 있지만 알림 권한이 꺼져 있어요");
+                return false;
+            }
+            ensureChannel(ctx);
+            Intent open = new Intent(ctx, MainActivity.class);
+            open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            open.putExtra("archiveUpdate", true);
+            PendingIntent pi = PendingIntent.getActivity(ctx, 7000, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            String ver = (tag == null || tag.isEmpty()) ? ("0.1." + n) : tag.replaceFirst("^v", "");
+            NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_archive)
+                .setContentTitle("아카이브 새 버전 " + ver)
+                .setContentText(body)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body + "\n눌러서 업데이트하세요"))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+                .setColor(0xFF1F2A44)
+                .setContentIntent(pi)
+                .setAutoCancel(true);
+            NotificationManagerCompat.from(ctx).notify(7000, b.build());
+            sp.edit().putLong("notified", n).apply();
+            mark(ctx, ver + " 알림을 보냈어요 (" + via + ")");
+            return true;
+        } catch (Exception e) {
+            mark(ctx, "알림 실패: " + e.getClass().getSimpleName());
+            return false;
+        }
+    }
+
     static void mark(Context ctx, String msg) {
         ctx.getSharedPreferences("archive_update", Context.MODE_PRIVATE).edit()
             .putLong("lastAt", System.currentTimeMillis()).putString("lastMsg", msg).apply();
@@ -87,35 +130,7 @@ public class UpdateWorker extends Worker {
             if (n <= cur) { mark(ctx, "최신 버전이에요"); return Result.success(); }
             if (n <= told) { mark(ctx, "0.1." + n + " 알림은 이미 보냈어요"); return Result.success(); }
 
-            String body = "눌러서 업데이트하세요";
-            for (String s : j.optString("body", "").split("\n")) {
-                s = s.trim();
-                if (s.isEmpty() || s.contains("APK") || s.contains("archive-") || s.startsWith("폰에서")) continue;
-                body = s.replaceFirst("^[-*]\\s*", ""); break;
-            }
-            if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                mark(ctx, "새 버전이 있지만 알림 권한이 꺼져 있어요");
-                return Result.success(); // 허용 전에는 보내지 않고, 허용 후 다음 확인 때 보내요
-            }
-            ensureChannel(ctx);
-            Intent open = new Intent(ctx, MainActivity.class);
-            open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            open.putExtra("archiveUpdate", true);
-            PendingIntent pi = PendingIntent.getActivity(ctx, 7000, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            String ver = tag.replaceFirst("^v", "");
-            NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL)
-                .setSmallIcon(R.drawable.ic_stat_archive)
-                .setContentTitle("아카이브 새 버전 " + ver)
-                .setContentText(body)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(body + "\n눌러서 업데이트하세요"))
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
-                .setColor(0xFF1F2A44)
-                .setContentIntent(pi)
-                .setAutoCancel(true);
-            NotificationManagerCompat.from(ctx).notify(7000, b.build());
-            sp.edit().putLong("notified", n).apply();
-            mark(ctx, ver + " 알림을 보냈어요");
+            notifyUpdate(ctx, n, tag, j.optString("body", ""), "1시간 확인");
         } catch (Exception e) {
             mark(ctx, "확인 실패: " + e.getClass().getSimpleName());
             return Result.retry();

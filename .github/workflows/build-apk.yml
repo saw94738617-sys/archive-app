@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -51,6 +52,10 @@ jobs:
           mkdir -p android/app/src/main/res/drawable && cp native/res/drawable/*.xml android/app/src/main/res/drawable/
           grep -q "androidx.work:work-runtime" android/app/build.gradle || sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' android/app/build.gradle
           grep -n "work-runtime" android/app/build.gradle
+          # 푸시 알림(Firebase)
+          sed -i '0,/^dependencies {/s//dependencies {\n    implementation platform("com.google.firebase:firebase-bom:33.7.0")\n    implementation "com.google.firebase:firebase-messaging"/' android/app/build.gradle
+          if [ -f native/google-services.json ]; then cp native/google-services.json android/app/google-services.json; echo "google-services.json 넣음"; fi
+          grep -n "google-services\|firebase" android/app/build.gradle android/build.gradle || true
           printf '\nsubprojects {\n    configurations.all {\n        resolutionStrategy {\n            force "androidx.browser:browser:1.8.0"\n        }\n    }\n}\n' >> android/build.gradle
           tail -8 android/build.gradle
           M=android/app/src/main/AndroidManifest.xml
@@ -58,6 +63,8 @@ jobs:
           grep -q POST_NOTIFICATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$M"
           grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n</manifest>#' "$M"
           grep -n "uses-permission" "$M"
+          grep -q UpdatePushService "$M" || sed -i 's#</application>#    <service android:name=".UpdatePushService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>\n    </application>#' "$M"
+          grep -n "UpdatePushService" "$M"
 
       - name: 버전 번호 넣기 (덮어 설치되게)
         run: |
@@ -120,3 +127,30 @@ jobs:
           files: |
             archive-dev-${{ steps.ver.outputs.name }}.apk
             archive-${{ steps.ver.outputs.name }}.apk
+
+      - name: Google 인증 (비밀키 없이 GitHub 신원으로)
+        id: gauth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/628094550104/locations/global/workloadIdentityPools/github/providers/archive-repo
+          service_account: firebase-adminsdk-fbsvc@archive-app-515405.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+
+      - name: 폰으로 새 버전 푸시 보내기
+        if: steps.gauth.outcome == 'success'
+        continue-on-error: true
+        env:
+          TOKEN: ${{ steps.gauth.outputs.access_token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          body = open("notes.md", encoding="utf-8").read().split("\n\n폰에서")[0].strip()
+          msg = {"message": {"topic": "updates", "android": {"priority": "high", "ttl": "86400s"},
+                 "data": {"build": "${{ github.run_number }}", "ver": "${{ steps.ver.outputs.name }}", "body": body[:300]}}}
+          req = urllib.request.Request("https://fcm.googleapis.com/v1/projects/archive-app-515405/messages:send",
+              data=json.dumps(msg).encode(), headers={"Authorization": "Bearer " + os.environ["TOKEN"], "Content-Type": "application/json"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              print(r.status, r.read()[:300])
+          PY

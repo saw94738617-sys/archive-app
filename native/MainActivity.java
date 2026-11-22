@@ -33,6 +33,12 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         } catch (Exception e) {
             Log.w("Archive", "update check schedule failed", e);
         }
+        try {
+            // 새 버전 푸시 받기 (Firebase 설정이 들어간 빌드에서만 동작)
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().subscribeToTopic(UpdatePushService.TOPIC);
+        } catch (Throwable t) {
+            Log.w("Archive", "push subscribe skipped", t);
+        }
     }
 
     @Override
