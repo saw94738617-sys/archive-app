@@ -119,7 +119,8 @@ function findChart(doc){
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const val=clean(o.option_value_orginal||o.option_value||o.option_name||"");if(!val)return;const parts=val.split(/[-/,]/).map(clean);const k=sizeKey(parts[parts.length-1]);
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
-      const v=!selling?"out":(useSt?(n>0?"in":"out"):(o.is_auto_soldout==="T"&&n<=0?"out":"in"));st[k]=st[k]==="in"?"in":v});
+      const noAuto=o.is_auto_soldout==="F"||o.use_soldout==="F";const unknownN=o.stock_number==null||o.stock_number==="";
+      const v=!selling?"out":(!useSt||noAuto||unknownN)?"in":(n>0?"in":"out");st[k]=st[k]==="in"?"in":v});
     return Object.keys(st).length?st:null}catch(e){return null}}
 
 async function shopifyData(url,html){if(!/cdn\.shopify\.com|Shopify\.theme|shopify-section/i.test(html))return null;
@@ -134,13 +135,13 @@ async function readProduct(url){
   const P={url,name:"",brand:"",price:null,currency:"",images:[],stock:null,chart:null,shop:"",src:[]};
   const lds=parseLD(doc);const ld=lds[0]||{};if(lds.length)P.src.push("JSON-LD");if(meta(doc,"og:title"))P.src.push("og 태그");
   P.name=clean(ld.name)||meta(doc,"og:title","twitter:title")||clean(doc.title);
-  const br=ld.brand;P.brand=clean(typeof br==="string"?br:br&&br.name)||meta(doc,"product:brand","og:brand");
+  const br=ld.brand||([].concat(ld.hasVariant||[])[0]||{}).brand;P.brand=clean(typeof br==="string"?br:br&&br.name)||meta(doc,"product:brand","og:brand");
   P.shop=meta(doc,"og:site_name");
   const imgs=[];const addI=v=>{if(!v)return;if(Array.isArray(v))return v.forEach(addI);if(typeof v==="object")return addI(v.url||v.contentUrl);const a=absUrl(v,url);if(a&&!imgs.includes(a))imgs.push(a)};
   lds.forEach(x=>addI(x.image));doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:secure_url"],meta[name="twitter:image"]').forEach(m=>addI(m.content));
   /* 상세 이미지 후보(상품 영역 큰 사진) */
   doc.querySelectorAll(".xans-product-image img, .product-image img, .product__media img, [class*=gallery] img, [class*=Gallery] img, #prdDetail img").forEach(im=>{if(imgs.length<14)addI(im.getAttribute("data-src")||im.getAttribute("src"))});
-  P.images=imgs.filter(u=>/^https?:/.test(u)&&!/(logo|icon|sprite|blank|spacer)\b/i.test(u));
+  P.images=[...new Set(imgs.filter(u=>/^https?:/.test(u)&&!/(logo|icon|sprite|blank|spacer)\b/i.test(u)).map(u=>/cafe24|poxo\.com|\/web\/product\//.test(u)?u.replace(/\/product\/(extra\/)?(small|medium|tiny)\//,"/product/$1big/"):u))];
   let offers=[];lds.forEach(x=>{const o=x.offers;if(o)offers=offers.concat(Array.isArray(o)?o:[o]);if(x.hasVariant)[].concat(x.hasVariant).forEach(v=>{if(v.offers)offers=offers.concat([].concat(v.offers).map(o=>({...o,name:o.name||v.name,size:v.size})))})});
   const o0=offers.find(o=>o.price!=null||o.lowPrice!=null)||{};
   const pr=o0.price!=null?o0.price:o0.lowPrice;P.price=pr!=null?+String(pr).replace(/[^\d.]/g,""):null;P.currency=o0.priceCurrency||"";
@@ -148,7 +149,7 @@ async function readProduct(url){
   /* 사이즈별 재고 */
   const st={};offers.forEach(o=>{const nm=o.size||o.name||o.sku||"";if(!nm||!o.availability)return;const k=sizeKey(nm);st[k]=st[k]==="in"?"in":availOf(o.availability)});
   if(Object.keys(st).length>1)P.stock=st;
-  const c24=cafe24Stock(html);if(c24){P.stock=c24;P.src.push("카페24 재고")}
+  const c24=cafe24Stock(html);if(c24){if(!(P.stock&&Object.keys(P.stock).length>1))P.stock=c24;P.src.push("카페24 재고")}
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
