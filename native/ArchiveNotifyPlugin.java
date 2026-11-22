@@ -99,7 +99,9 @@ public class ArchiveNotifyPlugin extends Plugin {
         r.put("open", sp.getString("open", ""));
         r.put("lastAt", sp.getLong("lastAt", 0));
         r.put("lastMsg", sp.getString("lastMsg", ""));
-        sp.edit().putString("updates", "[]").remove("open").apply();
+        r.put("share", sp.getString("share", ""));
+        r.put("shareSub", sp.getString("shareSub", ""));
+        sp.edit().putString("updates", "[]").remove("open").remove("share").remove("shareSub").apply();
         call.resolve(r);
     }
 

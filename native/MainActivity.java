@@ -76,5 +76,15 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         String id = intent.getStringExtra("openItem");
         if (id != null && !id.isEmpty())
             getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putString("open", id).apply();
+        // 다른 앱에서 '공유 → 아카이브': 넘겨받은 글(제목 · 링크)만 저장해 두고 앱에서 위시 기록 화면으로 열어요
+        if (Intent.ACTION_SEND.equals(intent.getAction())) {
+            CharSequence t = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+            String sub = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+            if (t != null && t.length() > 0) {
+                getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit()
+                    .putString("share", t.toString()).putString("shareSub", sub == null ? "" : sub).apply();
+            }
+            intent.setAction(Intent.ACTION_MAIN); // 다시 열 때 같은 공유가 또 들어오지 않게
+        }
     }
 }

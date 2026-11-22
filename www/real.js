@@ -975,11 +975,20 @@ async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP
     if(u.stock){s.stock=u.stock;changed=true}if(u.price){s.price=u.price;changed=true}s.checked=stamp()}
   if(changed){persistAll();if(typeof renderPins==="function")renderPins()}
   if(r.open){const it=ITEMS.find(x=>x.id===r.open);if(it)setTimeout(()=>openDetail(it.id),300)}
+  if(r.share)setTimeout(()=>fromShare(r.share,r.shareSub||""),350);
   if(r.lastAt){try{localStorage.setItem("archive-bgalert",JSON.stringify({at:r.lastAt,msg:r.lastMsg||""}))}catch(e){}}}
 {const _pa4=persistAll;persistAll=async function(){const r=await _pa4.apply(this,arguments);pushWatch();return r}}
 if(NATIVE){const go=()=>{if(!window.__archLoaded){setTimeout(go,500);return}pullWatch().then(pushWatch)};setTimeout(go,800);
   if(AppP)AppP.addListener("resume",()=>setTimeout(()=>pullWatch(),300))}
 document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setTimeout(()=>{lastWatch="";pushWatch()},100)});
+/* 다른 앱에서 '공유 → 아카이브': 위시로 기록 화면을 열고 공유받은 제목 · 링크로 채워요 (공식몰이 있으면 거기서 가져와요) */
+function fromShare(text,sub){text=String(text||"");sub=String(sub||"").trim();
+  const raw=sub&&!text.includes(sub)&&/https?:\/\//i.test(text)&&!nameFromShare(text)?sub+" "+text:text;
+  openRec();setKind("wish");
+  const u=pickUrl(raw);
+  if(!okUrl(u)){const nm=raw.replace(/\s+/g," ").trim().slice(0,120);if(nm)$("fName").value=nm;$("fetchStatus").textContent="공유받은 글에 링크가 없어서 이름만 넣었어요";return}
+  $("fLink").value=raw;realFetch()}
+window.archiveShare=fromShare;
 window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&NTP.alertsNow&&NTP.alertsNow()};
 
 /* ---------- 22) 사이즈표 사진 글자 읽기 (폰 안에서) ---------- */
