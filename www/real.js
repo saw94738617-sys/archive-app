@@ -982,6 +982,7 @@ async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP
   if(changed){persistAll();if(typeof renderPins==="function")renderPins()}
   if(r.open){const it=ITEMS.find(x=>x.id===r.open);if(it)setTimeout(()=>openDetail(it.id),300)}
   if(r.share)setTimeout(()=>fromShare(r.share,r.shareSub||""),350);
+  if(r.shareImg)setTimeout(()=>fromShot(r.shareImg),r.share?1500:350);
   if(r.lastAt){try{localStorage.setItem("archive-bgalert",JSON.stringify({at:r.lastAt,msg:r.lastMsg||""}))}catch(e){}}}
 {const _pa4=persistAll;persistAll=async function(){const r=await _pa4.apply(this,arguments);pushWatch();return r}}
 if(NATIVE){const go=()=>{if(!window.__archLoaded){setTimeout(go,500);return}pullWatch().then(pushWatch)};setTimeout(go,800);
@@ -990,7 +991,7 @@ document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setT
 /* 다른 앱에서 '공유 → 아카이브': 위시로 기록 화면을 열고 공유받은 제목 · 링크로 채워요 (공식몰이 있으면 거기서 가져와요) */
 async function fromShare(text,sub){text=String(text||"");sub=String(sub||"").trim();
   const raw=sub&&!text.includes(sub)&&/https?:\/\//i.test(text)&&!nameFromShare(text)?sub+" "+text:text;
-  openRec();setKind("wish");
+  if(!rec.classList.contains("on")){openRec();setKind("wish")}
   const u=pickUrl(raw);
   try{localStorage.setItem("archive-lastshare",JSON.stringify({text,sub,at:Date.now()}))}catch(e){}
   devLog({k:"share",msg:(sub?"제목: "+sub+" / ":"")+text.slice(0,300)});
@@ -999,6 +1000,54 @@ async function fromShare(text,sub){text=String(text||"");sub=String(sub||"").tri
   if(!nameFromShare(raw)){const st=$("fetchStatus");const p=document.createElement("small");p.className="sharegot";
     p.textContent="공유로 받은 글: "+(sub?sub+" · ":"")+text.replace(/\s+/g," ").slice(0,160);st.appendChild(p)}}
 window.archiveShare=fromShare;
+
+/* 캡처 공유: 폰 안에서 글자를 읽어 브랜드 · 이름 · 가격을 채우고 공식몰에서 찾아요 (쇼핑몰 서버에는 접속하지 않아요) */
+function shotLines(words,H){const W=(words||[]).map(w=>({t:String(w.t||"").trim(),x:+w.x,y:+w.y,w:+w.w,h:+w.h})).filter(w=>w.t);
+  W.forEach(w=>w.cy=w.y+w.h/2);W.sort((a,b)=>a.cy-b.cy);const L=[];
+  for(const w of W){const l=L[L.length-1];if(l&&Math.abs(w.cy-l.cy)<Math.min(w.h,l.ws[0].h)*0.55){l.ws.push(w);l.cy=(l.cy*(l.ws.length-1)+w.cy)/l.ws.length}else L.push({cy:w.cy,ws:[w]})}
+  return L.map(l=>{l.ws.sort((a,b)=>a.x-b.x);const hs=l.ws.map(w=>w.h).sort((a,b)=>a-b);
+    return {t:l.ws.map(w=>w.t).join(" ").replace(/\s+/g," ").trim(),y:Math.min(...l.ws.map(w=>w.y)),b:Math.max(...l.ws.map(w=>w.y+w.h)),h:hs[Math.floor(hs.length/2)],x:l.ws[0].x}}).filter(l=>l.y>H*0.035)}
+const SHOT_NOISE=/원|%|후기|쿠폰|적립|구매|장바구니|주차|D-\d|종료|할인|LV\.|스페셜|배송|무료|리뷰|좋아요|^\s*AI\b|\d+\s*\/\s*\d+|^[\d\s.,:]+$/i;
+function readShot(words,Wd,H){const L=shotLines(words,H);const out={brand:"",title:"",name:"",price:null,crop:null,lines:L.map(l=>l.t)};
+  const pr=L.map(l=>{const m=l.t.replace(/\s/g,"").match(/(\d{1,3}(?:,\d{3})+)원/);return m?{l,v:+m[1].replace(/,/g,"")}:null}).filter(Boolean);
+  if(pr.length){pr.sort((a,b)=>b.l.h-a.l.h||a.l.y-b.l.y);out.price=pr[0].v}
+  const crumb=L.find(l=>/[>›〉]/.test(l.t)&&/\(([^()]{1,20})\)\s*$/.test(l.t));
+  const cand=L.filter(l=>!SHOT_NOISE.test(l.t)&&!/[>›〉]/.test(l.t)&&/[가-힣A-Za-z]{2}/.test(l.t)&&l.t.length>=3&&l.y>H*0.12);
+  const sc=l=>l.h*(/\[|\]/.test(l.t)?1.25:1)*(/[A-Z]{3}/.test(l.t)?1.1:1);
+  const title=cand.slice().sort((a,b)=>sc(b)-sc(a))[0];
+  if(title){out.title=title.t;out.name=title.t.replace(/^\s*\[[^\]]{1,30}\]\s*/,"").trim()||title.t}
+  let bl=null;
+  if(typeof BR!=="undefined"){for(const l of L){const k=brKey(l.t.replace(/[ⓘ①ⓒ©]|\(i\)/g,""));const r=BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===k));if(r){out.brand=r.name;bl=l;break}}}
+  if(!out.brand&&crumb)out.brand=crumb.t.match(/\(([^()]{1,20})\)\s*$/)[1].trim();
+  if(!out.brand&&out.title){const m=out.title.match(/^\s*\[([^\]]{1,30})\]/);if(m){const parts=m[1].split(/\s*[x×X]\s*/);out.brand=parts[parts.length-1].trim()}}
+  if(out.brand&&!bl)bl=L.find(l=>l!==title&&brKey(l.t.replace(/[ⓘ①]|\(i\)/g,"")).startsWith(brKey(out.brand))&&l.t.length<=out.brand.length+12&&(!title||l.y<title.y));
+  const bottom=(bl||title)?((bl&&title?Math.min(bl.y,title.y):(bl||title).y)-H*0.012):0;
+  const nav=L.filter(l=>l.y<H*0.12);const top=nav.length?Math.max(...nav.map(l=>l.b))+H*0.015:H*0.08;
+  if(bottom-top>H*0.2)out.crop={x:0,y:Math.round(top),w:Wd,h:Math.round(bottom-top)};
+  return out}
+function cropData(url,c){return new Promise(ok=>{const im=new Image();im.onload=()=>{try{const cv=document.createElement("canvas");const k=Math.min(1,1600/c.w);cv.width=Math.round(c.w*k);cv.height=Math.round(c.h*k);
+  cv.getContext("2d").drawImage(im,c.x,c.y,c.w,c.h,0,0,cv.width,cv.height);ok(cv.toDataURL("image/jpeg",0.9))}catch(e){ok(url)}};im.onerror=()=>ok(url);im.src=url})}
+async function fromShot(dataUrl){if(!rec.classList.contains("on")){openRec();setKind("wish")}
+  const st=$("fetchStatus");
+  if(!OCR){toast("캡처 글자 읽기는 폰 앱에서 돼요");return}
+  st.innerHTML='<span class="spin"></span>캡처에서 글자 읽는 중…';
+  let r;try{r=await OCR.read({data:dataUrl})}catch(e){st.textContent="캡처의 글자를 읽지 못했어요 · 직접 적어 주세요";return}
+  const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ok(null);i.src=dataUrl});
+  const S=readShot(r.words,r.w||(im&&im.naturalWidth)||1080,r.h||(im&&im.naturalHeight)||2400);
+  devLog({k:"share",msg:"캡처: "+JSON.stringify({brand:S.brand,title:S.title,price:S.price})});
+  const got=[];
+  if(S.brand&&!$("fBrand").value){$("fBrand").value=S.brand;got.push("브랜드")}
+  if(S.title&&!$("fName").value){$("fName").value=S.title;$("fName").classList.add("flash");got.push("이름")}
+  if(S.price&&!$("fPrice").value){$("fPrice").value=S.price.toLocaleString("ko-KR");document.querySelectorAll("#cur button").forEach(b=>b.setAttribute("aria-pressed",b.textContent==="₩"));got.push("가격")}
+  const shot=S.crop?await cropData(dataUrl,S.crop):dataUrl;
+  const head=got.length?"캡처에서 "+got.join(" · ")+" 읽었어요":"캡처에서 상품 이름을 못 찾았어요 · 직접 적어 주세요";
+  if(S.brand&&S.name){const kno=(typeof BR!=="undefined")?BR.brands.find(x=>[x.name,...(x.aka||[])].some(n=>n&&brKey(n)===brKey(S.brand))):null;
+    const en=/^[A-Za-z0-9 .&'’\-_]+$/.test(S.brand)?S.brand:(kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-_]+$/.test(n||""))||"":"");
+    try{await toOfficial(S.title,null,{ko:S.brand,en,name:S.name})}catch(e){}}
+  if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker()}
+  const after=st.textContent;const okOff=/^공식몰\(/.test(after);
+  st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요")}
+window.archiveShot={read:readShot,from:fromShot};
 window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&NTP.alertsNow&&NTP.alertsNow()};
 
 /* ---------- 22) 사이즈표 사진 글자 읽기 (폰 안에서) ---------- */
@@ -1139,7 +1188,7 @@ window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
 
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
 function askOfficial(){const st=$("fetchStatus");
-  st.innerHTML=`무신사 링크만으로는 상품 이름을 알 수 없어요 (약관상 무신사 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
+  st.innerHTML=`무신사 링크만으로는 상품 이름을 알 수 없어요 (약관상 무신사 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br>💡 상품 화면을 <b>캡처해서 공유 → 아카이브</b>로 보내면 브랜드 · 이름 · 가격을 자동으로 읽어요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
   setTimeout(()=>{if(!$("fBrand").value)$("fBrand").focus();else if(!$("fName").value)$("fName").focus()},100)}
 document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;const br=$("fBrand").value.trim(),nm=$("fName").value.trim();
   if(!br||!nm){toast("브랜드와 이름을 먼저 적어 주세요");(!br?$("fBrand"):$("fName")).focus();return}

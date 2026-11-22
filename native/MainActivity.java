@@ -1,6 +1,14 @@
 package com.archive.myclothes;
 
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import android.os.Bundle;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
@@ -77,6 +85,26 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         if (id != null && !id.isEmpty())
             getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putString("open", id).apply();
         // 다른 앱에서 '공유 → 아카이브': 넘겨받은 글(제목 · 링크)만 저장해 두고 앱에서 위시 기록 화면으로 열어요
+        if (Intent.ACTION_SEND.equals(intent.getAction()) && intent.getType() != null && intent.getType().startsWith("image/")) {
+            // 캡처(사진) 공유: 폰 안에서 글자를 읽으려고 사진만 앱으로 넘겨요
+            try {
+                Uri u = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                if (u != null) {
+                    Bitmap bmp;
+                    try (InputStream in = getContentResolver().openInputStream(u)) { bmp = BitmapFactory.decodeStream(in); }
+                    if (bmp != null) {
+                        int mx = Math.max(bmp.getWidth(), bmp.getHeight());
+                        if (mx > 2600) { float k = 2600f / mx; bmp = Bitmap.createScaledBitmap(bmp, Math.round(bmp.getWidth() * k), Math.round(bmp.getHeight() * k), true); }
+                        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 90, bo);
+                        File f = new File(getCacheDir(), "share_img.txt");
+                        try (FileOutputStream fo = new FileOutputStream(f)) { fo.write(("data:image/jpeg;base64," + Base64.encodeToString(bo.toByteArray(), Base64.NO_WRAP)).getBytes("UTF-8")); }
+                        getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putString("shareImg", f.getAbsolutePath()).apply();
+                    }
+                }
+            } catch (Exception e) { Log.w("Archive", "share image", e); }
+            intent.setAction(Intent.ACTION_MAIN);
+        }
         if (Intent.ACTION_SEND.equals(intent.getAction())) {
             CharSequence t = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
             String sub = intent.getStringExtra(Intent.EXTRA_SUBJECT);

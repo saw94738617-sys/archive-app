@@ -101,7 +101,17 @@ public class ArchiveNotifyPlugin extends Plugin {
         r.put("lastMsg", sp.getString("lastMsg", ""));
         r.put("share", sp.getString("share", ""));
         r.put("shareSub", sp.getString("shareSub", ""));
-        sp.edit().putString("updates", "[]").remove("open").remove("share").remove("shareSub").apply();
+        String ip = sp.getString("shareImg", "");
+        if (!ip.isEmpty()) {
+            try {
+                java.io.File f = new java.io.File(ip);
+                byte[] b = new byte[(int) f.length()];
+                try (java.io.FileInputStream in = new java.io.FileInputStream(f)) { int o = 0, n; while (o < b.length && (n = in.read(b, o, b.length - o)) > 0) o += n; }
+                r.put("shareImg", new String(b, "UTF-8"));
+                f.delete();
+            } catch (Exception e) { /* 사진을 못 읽으면 건너뛰어요 */ }
+        }
+        sp.edit().putString("updates", "[]").remove("open").remove("share").remove("shareSub").remove("shareImg").apply();
         call.resolve(r);
     }
 
