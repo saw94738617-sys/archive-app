@@ -1057,6 +1057,10 @@ async function fromShot(dataUrl){if(!rec.classList.contains("on")){openRec();set
   if(S.brand&&S.name){const kno=(typeof BR!=="undefined")?BR.brands.find(x=>[x.name,...(x.aka||[])].some(n=>n&&brKey(n)===brKey(S.brand))):null;
     const en=/^[A-Za-z0-9 .&'’\-_]+$/.test(S.brand)?S.brand:(kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-_]+$/.test(n||""))||"":"");
     try{await toOfficial(S.title,null,{ko:S.brand,en:en||(S.ens||[])[0]||"",ens:S.ens||[],name:S.name})}catch(e){}}
+  /* 무신사 · 29CM 캡처면: 그 앱에서 다시 찾을 수 있게 검색 링크를 판매처에 남겨요 (링크만 만들고 접속하지 않아요) */
+  {const all=(S.lines||[]).join(" ")+" "+(r.text||"");const q=[S.brand,S.name].filter(Boolean).join(" ").trim();
+    const mk=/무신사|musinsa|무진장|나의 ?할인가/i.test(all)?{shop:"무신사",url:"https://www.musinsa.com/search/goods?keyword="+encodeURIComponent(q)}:/29cm/i.test(all)?{shop:"29CM",url:"https://www.29cm.co.kr/search?keyword="+encodeURIComponent(q)}:null;
+    if(mk&&q&&!recSellers.some(x=>/musinsa\.com|29cm\.co\.kr/.test(x.url||""))){recSellers.push({url:mk.url,shop:mk.shop+" (검색)",price:S.price?String(S.price):"",star:false});renderSellers();$("sellersBox").hidden=false}}
   if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker()}
   const after=st.textContent;const okOff=/^공식몰\(/.test(after);
   st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요")}
