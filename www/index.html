@@ -235,6 +235,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .szro th,.szro td{padding:10px 10px;border-bottom:1px solid #eee7d6;text-align:center;font-family:var(--mono)}
 .szro thead th{background:#efe9da;font-size:12.5px}
 .szro th:first-child,.szro td:first-child{text-align:left;font-family:var(--body);position:sticky;left:0;background:var(--paper)}
+.szro td:first-child{min-width:5.5em;max-width:8.5em;white-space:normal;word-break:keep-all;line-height:1.3;font-size:12.5px;box-shadow:2px 0 0 #eee7d6;z-index:1}
 .szro thead th:first-child{background:#efe9da}
 .szro .mine{background:#fdeedd;font-weight:700}
 .szro thead th.mine{background:var(--orange);color:#fff}
@@ -1631,6 +1632,7 @@ function fillExampleChart(){
   recChart={cols:[...CHART_T[key].cols],rows:EX[key].map(r=>[...r])};
   renderChart();$("sztEx").hidden=false;
 }
+function shortLbl(t){t=String(t||"");const k=t.match(/^[^A-Za-z]*[가-힣][^A-Za-z/]*/);const ko=k?k[0].replace(/[\s/(\-·:]+$/,"").trim():"";return ko.length>=2?ko:t}
 function chartHTML(it){
   if(!it.chart&&!it.chartImg)return"";
   let tbl="";
@@ -1638,7 +1640,7 @@ function chartHTML(it){
     const bi=it.kind==="arc"&&it.size?cols.findIndex(c=>szNorm(c)===szNorm(it.size)):-1;
     const my=myCols(it),mis=my.names.map(n=>cols.indexOf(n));
     const cls=i=>{const a=[];if(i===bi)a.push("mine");if(mis.includes(i))a.push("myc");return (a.length?` class="${a.join(" ")}"`:"")+` data-col="${escH(cols[i])}"`};
-    tbl=`<div class="sztwrap"><table class="szro"><thead><tr><th>${escH(it.chart.unit||"cm")}</th>${cols.map((c,i)=>`<th${cls(i)}>${escH(c)}</th>`).join("")}</tr></thead><tbody>${it.chart.rows.map(r=>`<tr><td>${escH(r[0])}</td>${r.slice(1).map((v,i)=>`<td${cls(i)}>${escH(v||"–")}${typeof cmpDiff==="function"?cmpDiff(it,r,i):""}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`+(typeof cmpLegend==="function"?cmpLegend(it):"")
+    tbl=`<div class="sztwrap"><table class="szro"><thead><tr><th>${escH(it.chart.unit||"cm")}</th>${cols.map((c,i)=>`<th${cls(i)}>${escH(c)}</th>`).join("")}</tr></thead><tbody>${it.chart.rows.map(r=>`<tr><td>${escH(shortLbl(r[0]))}</td>${r.slice(1).map((v,i)=>`<td${cls(i)}>${escH(v||"–")}${typeof cmpDiff==="function"?cmpDiff(it,r,i):""}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`+(typeof cmpLegend==="function"?cmpLegend(it):"")
       +(bi>=0?`<p class="mylegend"><b>■</b> 산 사이즈 (${escH(pre+cols[bi])})</p>`:"")
       +(mis.length?`<p class="mylegend"><b class="myk">□</b> 내 사이즈 (${escH(mis.map(i=>pre+cols[i]).join(", "))})${my.manual?` · 이 옷에서 직접 고름 <button type="button" class="myreset" data-myreset>설정대로 되돌리기</button>`:my.approx?" · 표의 허리 실측으로 맞춘 값":" · 설정 기준"}</p>`:(cols.length>1&&catSizeKey(it.c)?`<p class="mylegend">내 사이즈와 맞는 칸이 표에 없어요</p>`:""))
       +(cols.length>1?`<p class="mylegend pickhint">사이즈 칸을 누르면 이 옷의 내 사이즈로 정해져요</p>`:"")}
