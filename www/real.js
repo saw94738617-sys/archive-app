@@ -643,7 +643,7 @@ function dtPickers(it){const body=$("dtBody");if(!body)return;const dl=body.quer
   let cr=rowOf("카테고리");if(!cr){cr=document.createElement("div");dl.insertBefore(cr,dl.firstChild)}
   cr.className="dpick";cr.innerHTML=catHTML;
   let kr=dl.querySelector(".dpick.kind");if(!kr){kr=document.createElement("div");dl.insertBefore(kr,cr)}
-  kr.className="dpick kind";kr.innerHTML=`<dt>어디에 둘까요</dt><div class="pk big">${[["archive","아카이브 · 산 옷"],["wish","위시 · 갖고 싶은 옷"]].map(([k,n])=>`<button type="button" data-pk="${k}" aria-pressed="${(it.kind||"archive")===k}">${n}</button>`).join("")}</div>`;
+  kr.className="dpick kind";kr.innerHTML=`<dt>어디에 둘까요</dt><div class="pk big">${[["arc","아카이브 · 산 옷"],["wish","위시 · 갖고 싶은 옷"]].map(([k,n])=>`<button type="button" data-pk="${k}" aria-pressed="${(it.kind==="wish"?"wish":"arc")===k}">${n}</button>`).join("")}</div>`;
   if(it.kind==="wish"){let pr=rowOf("갖고 싶은 순위");if(!pr){pr=document.createElement("div");cr.after(pr)}const pn=prioNum(it.priority);
     pr.className="dpick";pr.innerHTML=`<dt>갖고 싶은 순위</dt><div class="pk prio">${[1,2,3,4,5].map(n=>`<button type="button" data-pp="${n}" aria-pressed="${n===pn}">${n}</button>`).join("")}</div><small>1순위가 제일 갖고 싶은 거예요 · 위시리스트에서 1순위부터 보여요</small>`}
 }
@@ -656,7 +656,7 @@ $("dtBody").addEventListener("click",e=>{const it=ITEMS.find(x=>x.id===dtId);if(
   if(a){const big=CATS.find(x=>x.id===it.c);if(!big)return;const nm=(prompt(`${big.name}에 넣을 세부 카테고리 이름`)||"").trim();if(!nm)return;
     let sid=big.subs.find(([,n])=>n===nm);if(!sid){sid=["u"+Date.now().toString(36),nm];big.subs.push(sid);savePrefs()}it.s=sid[0];dtSave(it,`'${nm}' 추가했어요`);return}
   const k=e.target.closest("[data-pk]");
-  if(k){const nk=k.dataset.pk;if((it.kind||"archive")===nk)return;it.kind=nk;if(nk==="wish"&&!it.priority)it.priority=3;dtSave(it,nk==="wish"?"위시로 옮겼어요 · 순위를 골라 주세요":"아카이브로 옮겼어요");return}
+  if(k){const nk=k.dataset.pk;if((it.kind==="wish"?"wish":"arc")===nk)return;it.kind=nk;if(nk==="wish"&&!it.priority)it.priority=3;dtSave(it,nk==="wish"?"위시로 옮겼어요 · 순위를 골라 주세요":"아카이브로 옮겼어요");return}
   if(p){const n=+p.dataset.pp;if(prioNum(it.priority)===n)return;it.priority=n;dtSave(it,`${n}순위로 바꿨어요`);return}
 });
 const _od=openDetail;openDetail=function(){const r=_od.apply(this,arguments);try{const it=ITEMS.find(x=>x.id===dtId);if(it)dtPickers(it)}catch(e){devLog&&devLog({k:"err",msg:"상세 고르기: "+(e.message||e)})}return r};
@@ -692,4 +692,28 @@ async function batteryNudge(force){if(!NTP)return;let r={};try{r=await NTP.statu
 setTimeout(()=>{const ob=$("ob"),gd=$("gd");if((!ob||ob.hidden)&&(!gd||gd.hidden))batteryNudge(false)},4000);
 const _bat=$("alPushBat");if(_bat){}
 document.addEventListener("click",e=>{if(e.target.closest("#alPushBatHelp"))batteryNudge(true)});
+
+/* ---------- 16) 링크로 추가한 옷의 브랜드 · 편집샵을 '브랜드 · 편집샵'에 자동으로 넣기 ---------- */
+const MARKET=/(^|\.)(coupang|gmarket|11st|auction|amazon|aliexpress|ebay|temu|tmon|wemakeprice|interpark|lotteon|ssg)\./i;
+function siteOf(it){const ss=it.sellers||[];const s=ss.find(x=>x.star)||ss[0];if(!s||!/^https?:/.test(s.url||""))return null;
+  let u;try{u=new URL(s.url)}catch(e){return null}const host=u.hostname.replace(/^(www|m|shop|store)\./,"");
+  const nm=(s.shop&&s.shop.length<30?s.shop:"")||host.split(".")[0];return{host,origin:u.origin+"/",name:nm.trim()}}
+function brFind(list,name){const k=brKey(name);return list.find(x=>[x.name,(x.sub||"").split("·")[0],...(x.aka||[])].some(n=>n&&brKey(n)===k))}
+function syncBR(it,say){const site=siteOf(it);if(!site)return[];const added=[];const brand=(it.brand||"").trim();
+  const latin=s=>brKey(s).replace(/[^a-z0-9]/g,"");
+  const official=!!brand&&(latin(brand).length>2&&(site.host.replace(/[^a-z0-9]/g,"").includes(latin(brand))||latin(site.name)===latin(brand))||brKey(site.name)===brKey(brand));
+  let b=null;
+  if(brand){b=brFind(BR.brands,brand);if(!b){b={id:"b"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:brand,sub:"",links:[],shops:[]};BR.brands.push(b);added.push(brand)}
+    b.links=b.links||[];b.shops=b.shops||[];
+    if(official&&!b.links.some(l=>l.url.replace(/\/$/,"")===site.origin.replace(/\/$/,"")))b.links.unshift({label:"공식몰",url:site.origin})}
+  if(!official&&site.name&&!MARKET.test(site.host)){let s=brFind(BR.shops,site.name);
+    if(!s){s={id:"s"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:site.name,sub:"",links:[{label:"홈페이지",url:site.origin}],brands:[]};BR.shops.push(s);added.push(site.name)}
+    s.brands=s.brands||[];if(brand&&!s.brands.some(x=>brKey(x)===brKey(brand)))s.brands.push(brand);
+    if(b&&!b.shops.some(x=>brKey(x)===brKey(s.name)))b.shops.push(s.name)}
+  return added}
+function syncAllBR(say){let added=[];for(const it of ITEMS){if(it.brSeen)continue;try{added=added.concat(syncBR(it))}catch(e){}if(siteOf(it))it.brSeen=1}
+  if(added.length){saveBR();if(say)toast(`브랜드 · 편집샵에 ${added.slice(0,2).join(", ")}${added.length>2?` 외 ${added.length-2}곳`:""} 추가했어요`)}
+  return added}
+{const _rp=renderPins;renderPins=function(){const r=_rp.apply(this,arguments);try{if(syncAllBR(true).length)persistAll()}catch(e){}return r}}
+setTimeout(()=>{try{if(syncAllBR(false).length)persistAll()}catch(e){}},1500);
 })();
