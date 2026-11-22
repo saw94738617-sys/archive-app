@@ -504,6 +504,19 @@ document.addEventListener("click",e=>{const b=e.target.closest("#dtAlt");if(!b)r
     run()},()=>{reDetail()})},true);
 const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="＋ 판매처 찾기";h.appendChild(b)}}catch(e){}};
 
+/* ---------- 11) 세부 카테고리 바로 추가 · 위시 순위 기본값 ---------- */
+function paintSubAdd(){const sc=$("subcats");if(!sc||sc.hidden||sc.querySelector(".subadd"))return;const b=document.createElement("button");b.type="button";b.className="subadd";b.textContent="＋ 직접 추가";sc.appendChild(b)}
+new MutationObserver(paintSubAdd).observe($("subcats"),{childList:true,attributes:true,attributeFilter:["hidden"]});
+$("subcats").addEventListener("click",e=>{const b=e.target.closest(".subadd");if(!b)return;e.stopImmediatePropagation();const c=CATS.find(x=>x.id===recCat);if(!c)return;
+  const nm=(prompt(`${c.name}에 넣을 세부 카테고리 이름`)||"").trim();if(!nm)return;let sid=c.subs.find(([,n])=>n===nm);
+  if(!sid){sid=["u"+Date.now().toString(36),nm];c.subs.push(sid);savePrefs();if(typeof buildTree==="function")buildTree()}
+  const sc=$("subcats");sc.innerHTML=c.subs.map(([id,n])=>`<button type="button" data-s="${id}" aria-pressed="false">${escH(n)}</button>`).join("");sc.hidden=false;
+  const nb=sc.querySelector(`[data-s="${sid[0]}"]`);if(nb)nb.click();toast(`'${nm}' 추가했어요`)},true);
+function rankMode(){const on=document.querySelector(".drawer .mi.on[data-c]");const w=!!on&&(on.dataset.kind==="wish"||on.dataset.c==="wish");const m=$("masonry");if(m)m.classList.toggle("ranked",w)}
+["renderPins","showCat","goHome"].forEach(n=>{const f=window[n];if(typeof f==="function")window[n]=function(){const r=f.apply(this,arguments);try{rankMode()}catch(e){}return r}});
+document.addEventListener("click",e=>{if(e.target.closest(".drawer .mi, #wishBtn"))setTimeout(rankMode,0)});
+const _or=openRec;openRec=function(){const r=_or.apply(this,arguments);if(!editingId)document.querySelectorAll("#fPrio button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.p==="3"));return r};
+
 /* ---------- 7) 앱 업데이트 확인 ---------- */
 const REPO="saw94738617-sys/archive-app";
 const BUILD=+(window.ARCHIVE_BUILD||0);
