@@ -435,6 +435,24 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .masonry.ranked[data-cols="3"]{grid-template-columns:repeat(3,minmax(0,1fr));column-gap:7px}
 .masonry.ranked[data-cols="4"]{grid-template-columns:repeat(4,minmax(0,1fr));column-gap:6px}
 .masonry.ranked .pin[hidden]{display:none}
+.gd{position:absolute;inset:0;z-index:96;background:var(--cream);color:var(--indigo);display:flex;flex-direction:column;transition:opacity .3s}
+.gd[hidden]{display:none}.gd.bye{opacity:0}
+.gdwrap{flex:1;display:flex;flex-direction:column;padding:max(22px,env(safe-area-inset-top)) 0 max(20px,env(safe-area-inset-bottom));max-width:520px;width:100%;margin:0 auto;min-height:0}
+.gdhead{display:flex;justify-content:space-between;align-items:center;padding:0 22px;min-height:34px}
+.gdhead .k{font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:var(--orange);font-weight:600}
+.gdtrack{flex:1;display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;min-height:0}
+.gdtrack::-webkit-scrollbar{display:none}
+.gdp{flex:0 0 100%;scroll-snap-align:center;box-sizing:border-box;padding:8px 24px 0;display:flex;flex-direction:column;overflow-y:auto}
+.gdart{background:var(--paper);border-radius:20px;box-shadow:0 1px 0 #ddd5c1;padding:14px;margin-bottom:20px}
+.gdart svg{display:block;width:100%;height:auto}
+.gdp h2{margin:0 0 8px;font-size:22px;line-height:1.3;letter-spacing:-.01em}
+.gdp ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.gdp li{position:relative;padding-left:22px;font-size:14px;line-height:1.55;color:#3c4458}
+.gdp li::before{content:"";position:absolute;left:4px;top:.62em;width:7px;height:7px;border-radius:2px;background:var(--orange)}
+.gdp li b{color:var(--indigo)}
+.gdbot{padding:12px 24px 0;display:flex;align-items:center;gap:12px}
+.gdbot .obdots{flex:1}
+.gdbot .obmain{width:auto;padding:13px 26px}
 .dvin{display:flex;gap:8px}
 .dvin input{flex:1;min-width:0;background:#11151c;border:1px solid #2b3242;border-radius:10px;color:#e7e3d8;padding:10px 12px;font:inherit;font-size:13px}
 .dvin button,.dvbtns button{background:#2b3242;color:#e7e3d8;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
@@ -943,6 +961,7 @@ svg{display:block}
         <div class="row"><span class="lb">첫 화면 사진 자동 넘김</span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="사진 자동 넘김"></button></div>
         <div class="row"><span class="lb">한 줄에 보는 개수<small>목록 위 버튼으로도 바꿀 수 있어요</small></span><div class="seg" data-seg id="setCols"><button type="button" data-n="1" aria-pressed="false">1개</button><button type="button" data-n="2" aria-pressed="true">2개</button><button type="button" data-n="3" aria-pressed="false">3개</button><button type="button" data-n="4" aria-pressed="false">4개</button></div></div>
         <div class="row"><span class="lb">가격 숨기기<small>다른 사람에게 보여줄 때</small></span><button class="sw" type="button" role="switch" aria-checked="false" aria-label="가격 숨기기"></button></div>
+        <button class="row" type="button" id="gdAgain"><span class="lb">사용 가이드<small>기록 · 위시 순위 · 메뉴 · 사이즈 · 알림 · 백업</small></span><span class="val"></span></button>
         <button class="row" type="button" id="obAgain"><span class="lb">처음 시작 화면 다시 보기<small>시작 방법 · 내 사이즈 · 알림</small></span><span class="val"></span></button>
       </div></div>
 
