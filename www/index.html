@@ -232,6 +232,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .szimg input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .szimgprev img{width:100%;border-radius:12px;display:block}
 .srow2 a,.srow .sn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.optcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.optc-b{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1.5px solid var(--line,#d9d2c0);background:transparent;color:inherit;font:inherit;font-size:13px}.optc-b i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(127,127,127,.5)}.optc-b[aria-pressed=true]{border-color:#c8622d;background:rgba(200,98,45,.14);font-weight:700}.optc label small{font-weight:400;opacity:.7;margin-left:6px}
 .szro{border-collapse:collapse;width:100%;font-size:13.5px;min-width:max-content}
 .szro th,.szro td{padding:10px 10px;border-bottom:1px solid #eee7d6;text-align:center;font-family:var(--mono)}
 .szro thead th{background:#efe9da;font-size:12.5px}
@@ -1328,7 +1329,7 @@ $("recSave").onclick=()=>{
   const price=$("fPrice").value?cur+$("fPrice").value:"";
   const wasEdit=!!editingId;
   const old=wasEdit?ITEMS.find(x=>x.id===editingId):null;
-  const it={id:editingId||"i"+Date.now().toString(36),kind:recKind,name,brand:$("fBrand").value.trim(),c:recCat,s:recSub,size:$("fSize").value.trim(),price,
+  const _oc=window.__recOptColor?window.__recOptColor():{c:"",cs:[]};const it={id:editingId||"i"+Date.now().toString(36),optColor:_oc.c,optColors:_oc.cs,kind:recKind,name,brand:$("fBrand").value.trim(),c:recCat,s:recSub,size:$("fSize").value.trim(),price,
     date:recKind==="arc"?$("fDate").value:"",shop:recKind==="arc"?$("fShop").value.trim():(recSellers[0]?recSellers[0].shop:""),
     priority:recKind==="wish"?+((document.querySelector("#fPrio [aria-pressed=true]")||{dataset:{p:3}}).dataset.p):"",
     color:/^#[0-9a-f]{6}$/i.test($("fHex").value.trim())?$("fHex").value.trim().toLowerCase():"",memo:$("fMemo").value.trim(),

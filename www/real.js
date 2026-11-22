@@ -127,6 +127,23 @@ function optionStock(doc){const groups=new Map();
     const anyOut=list.some(x=>x.out);const isSel=par.tagName==="SELECT";if(!anyOut&&!isSel)continue;
     if(!best||ks.size>best.size||(anyOut&&!best.anyOut))best={list,size:ks.size,anyOut}}
   if(!best)return null;const st={};best.list.forEach(x=>{st[x.k]=st[x.k]==="in"?"in":(x.out?"out":"in")});return st}
+/* 카페24 옵션 'BLACK-M' · '블랙/M' → 색상별 재고 */
+function cafe24By(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
+  try{const j=JSON.parse((new Function("return '"+m[1]+"'"))());const by={};
+    Object.values(j).forEach(o=>{const val=clean(String(o.option_value_orginal||o.option_value||o.option_name||""));const parts=val.split(/\s*[-/,]\s*/).map(clean).filter(Boolean);if(parts.length<2)return;
+      const k=sizeKey(parts[parts.length-1]);const col=parts.slice(0,-1).join(" ");
+      const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
+      const noAuto=o.is_auto_soldout==="F"||o.use_soldout==="F";const unknownN=o.stock_number==null||o.stock_number==="";
+      const v=!selling?"out":(!useSt||noAuto||unknownN)?"in":(n>0?"in":"out");(by[col]=by[col]||{})[k]=by[col][k]==="in"?"in":v});
+    return Object.keys(by).length>=2?by:null}catch(e){return null}}
+/* 재고는 모르지만 색상 옵션 이름만 보일 때 (select 안 색상 목록) */
+function optionColors(doc){for(const sel of doc.querySelectorAll("select")){const lab=clean(((sel.closest("tr,li,div,dl")||{}).textContent||"").slice(0,60))+" "+(sel.getAttribute("name")||"")+" "+(sel.id||"");
+    if(!/색상|컬러|colou?r/i.test(lab))continue;const cs=[...sel.options].map(o=>clean(o.textContent).replace(/\s*[\[(](품절|sold ?out)[\])]\s*$/i,"")).filter(t=>t&&!/선택|choose|select|-{2,}|옵션/i.test(t)&&t.length<=30);
+    if(cs.length>=2)return [...new Set(cs)]}return null}
+const colorN=c=>clean(c).toUpperCase().replace(/\s+/g," ");
+function colorKeyIn(by,color){if(!by||!color)return null;const w=colorN(color);const ks=Object.keys(by);return ks.find(k=>colorN(k)===w)||ks.find(k=>colorN(k).includes(w)||w.includes(colorN(k)))||null}
+function stockFor(x,color){const k=colorKeyIn(x&&x.stockBy,color);return k?x.stockBy[k]:(x?x.stock:null)}
+window.archiveStockFor=stockFor;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const val=clean(o.option_value_orginal||o.option_value||o.option_name||"");if(!val)return;const parts=val.split(/[-/,]/).map(clean);const k=sizeKey(parts[parts.length-1]);
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
@@ -139,7 +156,9 @@ async function shopifyData(url,html){if(!/cdn\.shopify\.com|Shopify\.theme|shopi
     const cur=(html.match(/Shopify\.currency\s*=\s*\{[^}]*"active"\s*:\s*"([A-Z]{3})"/)||[])[1]||meta(new DOMParser().parseFromString(html,"text/html"),"og:price:currency","product:price:currency")||"";
     const st={};(j.variants||[]).forEach(v=>{const opts=[v.option1,v.option2,v.option3].filter(Boolean);const sz=opts.find(o=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|US ?\d+(\.5)?)$/i.test(clean(o)))||opts[opts.length-1]||v.title;const k=sizeKey(sz);st[k]=st[k]==="in"?"in":(v.available?"in":"out")});
     const dec=cur==="JPY"||cur==="KRW"?1:100;
-    return {name:j.title,brand:j.vendor,price:j.price!=null?j.price/dec:null,currency:cur,images:(j.images||[]).map(s=>absUrl(s,url)),stock:Object.keys(st).length?st:null}}catch(e){return null}}
+    const by={};const isSz=o=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|US ?\d+(\.5)?)$/i.test(clean(o))||/\(\d{2}(\.\d)?cm\)/i.test(o);
+    (j.variants||[]).forEach(v=>{const opts=[v.option1,v.option2,v.option3].filter(Boolean);const sz=opts.find(isSz);const col=opts.filter(o=>o!==sz).join(" / ");if(!sz||!col)return;const k=sizeKey(sz);(by[col]=by[col]||{})[k]=by[col][k]==="in"?"in":(v.available?"in":"out")});
+    return {name:j.title,brand:j.vendor,price:j.price!=null?j.price/dec:null,currency:cur,images:(j.images||[]).map(s=>absUrl(s,url)),stock:Object.keys(st).length?st:null,by:Object.keys(by).length>=2?by:null}}catch(e){return null}}
 
 async function readProduct(url){
   const html=await getText(url);const doc=new DOMParser().parseFromString(html,"text/html");
@@ -153,7 +172,7 @@ async function readProduct(url){
   /* 상세 이미지 후보(상품 영역 큰 사진) */
   doc.querySelectorAll(".xans-product-image img, .product-image img, .product__media img, [class*=gallery] img, [class*=Gallery] img, #prdDetail img").forEach(im=>{if(imgs.length<14)addI(im.getAttribute("data-src")||im.getAttribute("src"))});
   P.images=[...new Set(imgs.filter(u=>/^https?:/.test(u)&&!/(logo|icon|sprite|blank|spacer)\b/i.test(u)).map(u=>/cafe24|poxo\.com|\/web\/product\//.test(u)?u.replace(/\/product\/(extra\/)?(small|medium|tiny)\//,"/product/$1big/"):u))];
-  let offers=[];lds.forEach(x=>{const o=x.offers;if(o)offers=offers.concat(Array.isArray(o)?o:[o]);if(x.hasVariant)[].concat(x.hasVariant).forEach(v=>{if(v.offers)offers=offers.concat([].concat(v.offers).map(o=>({...o,name:o.name||v.name,size:v.size})))})});
+  let offers=[];lds.forEach(x=>{const o=x.offers;if(o)offers=offers.concat(Array.isArray(o)?o:[o]);if(x.hasVariant)[].concat(x.hasVariant).forEach(v=>{if(v.offers)offers=offers.concat([].concat(v.offers).map(o=>({...o,name:o.name||v.name,size:v.size,color:v.color||(v.additionalProperty&&[].concat(v.additionalProperty).filter(a=>/colou?r|색/i.test(a.name||"")).map(a=>a.value)[0])||""})))})});
   const o0=offers.find(o=>o.price!=null||o.lowPrice!=null)||{};
   const pr=o0.price!=null?o0.price:o0.lowPrice;P.price=pr!=null?+String(pr).replace(/[^\d.]/g,""):null;P.currency=o0.priceCurrency||"";
   if(P.price==null){const a=meta(doc,"product:price:amount","og:price:amount","product:sale_price:amount");if(a)P.price=+a.replace(/[^\d.]/g,"");P.currency=P.currency||meta(doc,"product:price:currency","og:price:currency")}
@@ -163,6 +182,16 @@ async function readProduct(url){
   const c24=cafe24Stock(html);if(c24){if(!(P.stock&&Object.keys(P.stock).length>1))P.stock=c24;P.src.push("카페24 재고")}
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock){const os=optionStock(doc);if(os){P.stock=os;P.src.push("옵션 품절 표시")}}
+  /* 색상별 재고 */
+  try{let by=null;
+    const ldBy={};offers.forEach(o=>{const c=clean(o.color||"");const nm=o.size||"";if(!c||!nm||!o.availability)return;const k=sizeKey(nm);(ldBy[c]=ldBy[c]||{})[k]=(ldBy[c][k]==="in")?"in":availOf(o.availability)});
+    if(Object.keys(ldBy).length>=2)by=ldBy;
+    if(!by){const c=cafe24By(html);if(c)by=c}
+    if(!by&&sh&&sh.by)by=sh.by;
+    if(!by){const d=optionColors(doc);if(d)P.colorsOnly=d}
+    if(by){P.stockBy=by;P.colors=Object.keys(by)}else if(P.colorsOnly)P.colors=P.colorsOnly}catch(e){}
+  if(P.price==null){const pe=doc.querySelector('[itemprop=price][content],meta[itemprop=price]');if(pe)P.price=+String(pe.getAttribute("content")).replace(/[^\d.]/g,"")||null}
+  if(P.price==null){for(const el of doc.querySelectorAll('#span_product_price_text,.item_price,.prd_price,.price_info .price,.prdPrice,.price strong,strong.price,.sale_price,.price')){const m=clean(el.textContent).match(/([\d]{1,3}(?:,\d{3})+|\d{4,})\s*원/);if(m){P.price=+m[1].replace(/,/g,"");P.currency=P.currency||"KRW";P.src.push("가격 글자");break}}}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
   try{P.sizePairs=sizePairsFrom((doc.body&&doc.body.textContent||"").replace(/\s+/g," "))}catch(e){}
@@ -213,7 +242,7 @@ async function realFetch(){
     if(!P.chart&&P.detail&&P.detail.length&&OCR){$("fetchStatus").innerHTML='<span class="spin"></span>상세 이미지에서 사이즈표 찾는 중…';try{const r=await chartFromDetail(P.detail);if(r){P.chart=r.chart;P.chartImg=r.img}}catch(e){}}
     if(!P.chart&&(P.stock||P.sizePairs)){const c=shoeChart(Object.keys(P.stock||P.sizePairs),recCat==="shoes"||SHOE_RE.test(P.name||"")||!!P.sizePairs,P.sizePairs);if(c){P.chart=c;P.chartGen=true}}
     addSeller(v);const s=recSellers.find(x=>x.url===v);
-    if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stock){s.stock=P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
+    if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stockBy)s.stockBy=P.stockBy;if(P.colors)setRecColors(P.colors);if(P.stock||P.stockBy){s.stock=stockFor(P,recOptColor)||P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
     const fill=[];
     if(P.name&&!$("fName").value){$("fName").value=P.name;$("fName").classList.add("flash");fill.push("이름")}
     if(P.brand&&!$("fBrand").value){$("fBrand").value=P.brand;fill.push("브랜드")}
@@ -234,7 +263,7 @@ async function realFetch(){
 /* 재고 다시 확인 */
 async function refreshItem(it,quiet){
   const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);const before={...(s.stock||{})},bp=s.price;
-      s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stock)s.stock=P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
+      s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
     catch(e){res.push({s,ok:false})}}
   if(!quiet){const ok=res.filter(r=>r.ok).length;toast(ok?`${ok}곳 확인했어요 · ${stamp()}`:"판매처 페이지를 읽지 못했어요")}
   return res}
@@ -492,12 +521,24 @@ function shopCands(excl){const st=shopStore(),set=new Set();
 function shopOrigins(excl){const st=shopStore();return shopCands(excl).filter(o=>st.ok.includes(o)&&!st.off.includes(o))}
 /* 약관 확인: 쇼핑몰 약관 페이지를 한 번 읽고 자동 수집 금지 문구가 있는지 찾아요 */
 const BAN_RE=/(크롤러|크롤링|스크래핑|스파이더|로봇\s*\(|로봇|매크로|자동화된\s*(수단|프로그램|방법|도구)|자동화\s*프로그램|데이터\s*마이닝|무단\s*수집|crawl|scrap|spider|robot|data\s*mining|automated\s*(means|access|tool|system))/i;
-function termsCands(o){return [o+"/member/agreement.html",o+"/policies/terms-of-service",o+"/pages/terms-of-service",o+"/terms",o+"/agreement",o+"/policy/terms"]}
+function termsCands(o){return [o+"/member/agreement.html",o+"/policies/terms-of-service",o+"/pages/terms-of-service",o+"/terms",o+"/agreement",o+"/policy/terms",o+"/service/agreement.php",o+"/shop/agreement.html",o+"/html/info.html?type=agreement",o+"/?mode=policy",o+"/policy",o+"/terms-of-service"]}
+/* 첫 화면에서 '이용약관' 링크를 찾아 후보에 더해요 (쇼핑몰마다 주소가 달라서) */
+async function termsLinks(o){try{const html=await getText(o+"/");const doc=new DOMParser().parseFromString(html,"text/html");
+  return [...doc.querySelectorAll("a[href]")].filter(a=>/이용\s*약관|^약관$|terms|agreement|policy/i.test(clean(a.textContent)+" "+a.getAttribute("href"))&&!/개인정보|privacy/i.test(clean(a.textContent))).map(a=>absUrl(a.getAttribute("href"),o)).filter(u=>/^https?:/.test(u)).slice(0,6)}catch(e){return []}}
+/* robots.txt: 쇼핑몰이 프로그램 접근을 막아 둔 주소면 읽지 않아요 */
+async function robotsRules(o){const st=shopStore();st.robots=st.robots||{};const c=st.robots[o];if(c&&Date.now()-c.at<7*864e5)return c;
+  let r={dis:[],allow:[],at:Date.now()};try{const t=await getText(o+"/robots.txt");let on=false,seen=false;
+    for(const raw of t.split(/\r?\n/)){const line=raw.replace(/#.*/,"").trim();if(!line)continue;const m=line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();
+      if(k==="user-agent"){if(seen&&!on){}on=v==="*";seen=true;continue}
+      if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}}catch(e){}
+  st.robots[o]=r;shopSave(st);return r}
+function robotsOk(r,path){const hit=(rules)=>rules.filter(p=>{const re=new RegExp("^"+p.replace(/[.+?^${}()|[\]\\]/g,"\\$&").replace(/\*/g,".*").replace(/\\\$$/,"$"));return re.test(path)}).reduce((a,p)=>Math.max(a,p.length),-1);
+  const d=hit(r.dis),a=hit(r.allow);return d<0||a>=d}
 async function checkTerms(o){const st=shopStore();let res={result:"unknown",url:"",snip:"",at:Date.now()};
   const one=async u=>{const html=await getText(u);const doc=new DOMParser().parseFromString(html,"text/html");doc.querySelectorAll("script,style,noscript").forEach(n=>n.remove());
     const txt=clean(doc.body?doc.body.textContent:"");if(txt.length<400||!/(약관|이용|terms|conditions)/i.test(txt))throw new Error("약관 아님");return {u,txt}};
   /* 약관이 있을 만한 주소를 동시에 열어 보고, 먼저 찾은 것을 써요 (최대 5초) */
-  const cands=termsCands(o);
+  const cands=[...termsCands(o),...(await termsLinks(o))];
   const hit=await Promise.race([
     Promise.any(cands.map(one)).catch(()=>null),
     new Promise(r=>setTimeout(()=>r(null),5000))]);
@@ -930,7 +971,7 @@ function nameFromShare(t){t=String(t||"");
   const i=t.search(/https?:\/\//i);const pre=clean(i>0?t.slice(0,i):"");if(ok(pre))return pre;
   const parts=t.replace(/https?:\/\/\S+/gi,"\n").split(/\n+/).map(clean).filter(ok);
   return parts.sort((a,b)=>b.length-a.length)[0]||""}
-{const _rp2=readProduct;readProduct=async function(url){url=canon(url);const _st=shopStore(),_o=originOf(url);if(_st.terms[_o]&&_st.terms[_o].result==="ban"){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
+{const _rp2=readProduct;readProduct=async function(url){url=canon(url);const _st=shopStore(),_o=originOf(url);if(_st.terms[_o]&&_st.terms[_o].result==="ban"){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(!window.__testPages){try{const u=new URL(url);const rr=await robotsRules(u.origin);if(!robotsOk(rr,u.pathname+u.search)){const e=new Error("이 쇼핑몰은 robots.txt로 프로그램 접근을 막아 둔 주소예요");e.noFetch=true;throw e}}catch(e){if(e.noFetch)throw e}}return _rp2(url)};window.archiveReadProduct=readProduct}
 window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
 
 /* ---------- 20) 동기화 v3: 사진은 드라이브에 따로 (목록 파일은 가볍게) ---------- */
@@ -988,9 +1029,9 @@ restoreFromDrive=async function(f){const r=await drive(`drive/v3/files/${f.id}?a
 /* ---------- 21) 재입고 · 가격 알림 백그라운드 (앱이 꺼져 있어도 6시간마다) ---------- */
 function watchList(){const st=shopStore();return ITEMS.filter(x=>x.kind==="wish"&&x.alert&&(x.alert.restock||x.alert.price)).map(it=>{
     const my=(typeof myCols==="function"?myCols(it).names[0]:"")||"";
-    const sellers=(it.sellers||[]).filter(s=>{if(!/^https?:/.test(s.url||"")||noFetch(s.url))return false;const t=st.terms[originOf(s.url)];return !(t&&t.result==="ban")})
+    const sellers=(it.sellers||[]).filter(s=>{if(!/^https?:/.test(s.url||"")||noFetch(s.url))return false;const o=originOf(s.url);const t=st.terms[o];if(t&&t.result==="ban")return false;const rb=(st.robots||{})[o];if(rb){try{const u=new URL(s.url);if(!robotsOk(rb,u.pathname+u.search))return false}catch(e){}}return true})
       .map(s=>({url:s.url,shop:s.shop||"",price:s.price||"",stock:s.stock||null}));
-    return {id:it.id,title:(it.brand?it.brand+" ":"")+it.name,my,restock:!!it.alert.restock,price:!!it.alert.price,target:+(it.alert.target||0),sellers}}).filter(w=>w.sellers.length)}
+    return {id:it.id,title:(it.brand?it.brand+" ":"")+it.name+(it.optColor?" ("+it.optColor+")":""),color:it.optColor||"",my,restock:!!it.alert.restock,price:!!it.alert.price,target:+(it.alert.target||0),sellers}}).filter(w=>w.sellers.length)}
 let lastWatch="";
 async function pushWatch(){if(!NTP||!NTP.setWatch)return;try{const j=JSON.stringify(watchList());if(j===lastWatch)return;lastWatch=j;const fr=(typeof alertCfg!=="undefined"&&+alertCfg.freq)||3;await NTP.setWatch({json:j,hours:Math.round(24/fr)})}catch(e){devLog({k:"err",msg:"알림 목록 넘기기: "+(e.message||e)})}}
 async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP.pullAlerts()}catch(e){return}
@@ -1324,6 +1365,32 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
+/* ---------- 28) 색상 옵션 고르기 (색마다 재고가 달라요) ---------- */
+let recOptColor="",recOptColors=[];
+const CNAME_HEX=[[/black|블랙|검정/i,"#1c1c1c"],[/navy|네이비|남색/i,"#1f2a44"],[/white|화이트|흰/i,"#f4f2ec"],[/ivory|아이보리|ecru|에크루|오프 ?화이트|off ?white/i,"#ece4d2"],[/cream|크림/i,"#efe6cf"],[/beige|베이지/i,"#d6c4a3"],[/sand|샌드/i,"#cdb994"],[/brown|브라운|갈색/i,"#6b4a32"],[/camel|카멜/i,"#b5895a"],[/tan|탄/i,"#b08a62"],[/khaki|카키/i,"#7a7451"],[/olive|올리브/i,"#5e6240"],[/green|그린|초록/i,"#3f5e45"],[/indigo|인디고/i,"#2d3a5c"],[/blue|블루|파랑/i,"#3a5a8c"],[/sky|스카이/i,"#8db3d6"],[/grey|gray|그레이|회색|charcoal|차콜/i,"#6f6f6f"],[/red|레드|빨강/i,"#a33a32"],[/burgundy|버건디|wine|와인/i,"#6a2330"],[/pink|핑크/i,"#d9a3ad"],[/yellow|옐로|노랑|mustard|머스타드/i,"#c9a23a"],[/orange|오렌지/i,"#c8622d"],[/purple|퍼플|보라/i,"#6a4c7a"]];
+const hexOfName=n=>{for(const [re,h] of CNAME_HEX)if(re.test(n||""))return h;return ""};
+function setRecColors(list){recOptColors=[...new Set((list||[]).map(clean).filter(Boolean))];renderRecColors()}
+function applyRecColor(){recSellers.forEach(x=>{if(x.stockBy){const st=stockFor(x,recOptColor);if(st)x.stock=st}});if(typeof renderSellers==="function")renderSellers();
+  const h=hexOfName(recOptColor);if(h&&$("fHex")){$("fHex").value=h;$("fColor").value=h}}
+function renderRecColors(){let box=$("optColorBox");const anchor=$("fHex")&&$("fHex").closest(".fld");if(!anchor)return;
+  if(!box){box=document.createElement("div");box.id="optColorBox";box.className="fld optc";anchor.before(box)}
+  box.hidden=!recOptColors.length;if(!recOptColors.length){box.innerHTML="";return}
+  box.innerHTML=`<label>색상 옵션 <small>고르면 그 색 재고로 보여요</small></label><div class="optcs">${recOptColors.map(c=>`<button type="button" class="optc-b" data-oc="${escH(c)}" aria-pressed="${colorN(c)===colorN(recOptColor)}"><i style="background:${hexOfName(c)||"transparent"}"></i>${escH(c)}</button>`).join("")}</div>`}
+document.addEventListener("click",e=>{const b=e.target.closest("#optColorBox [data-oc]");if(!b)return;const c=b.dataset.oc;recOptColor=colorN(c)===colorN(recOptColor)?"":c;renderRecColors();applyRecColor()});
+/* 기록 화면 열 때 · 저장할 때 */
+if(typeof openRec==="function"){const _or=openRec;openRec=function(){const r=_or.apply(this,arguments);recOptColor="";recOptColors=[];renderRecColors();return r};window.openRec=openRec}
+document.addEventListener("click",e=>{if(!e.target.closest("#dtEdit"))return;const id=dtId;setTimeout(()=>{const it=ITEMS.find(x=>x.id===id);if(!it)return;recOptColor=it.optColor||"";
+  const cs=new Set(it.optColors||[]);(it.sellers||[]).forEach(x=>x.stockBy&&Object.keys(x.stockBy).forEach(k=>cs.add(k)));recOptColors=[...cs];renderRecColors()},0)});
+window.__recOptColor=()=>({c:recOptColor,cs:recOptColors.slice()});
+/* 상세 화면: 색상 옵션 줄 */
+function itemColors(it){const cs=new Set(it.optColors||[]);(it.sellers||[]).forEach(x=>x.stockBy&&Object.keys(x.stockBy).forEach(k=>cs.add(k)));return [...cs]}
+function colorRowHTML(it){const cs=itemColors(it);if(cs.length<2&&!it.optColor)return "";
+  return `<div class="dsec dcolor"><h3>색상 옵션</h3><div class="optcs">${cs.map(c=>`<button type="button" class="optc-b" data-dco="${escH(c)}" aria-pressed="${colorN(c)===colorN(it.optColor||"")}"><i style="background:${hexOfName(c)||"transparent"}"></i>${escH(c)}</button>`).join("")}</div><p class="note">고른 색의 사이즈별 재고로 보여 주고, 재입고 알림도 그 색으로 와요</p></div>`}
+if(typeof chartHTML==="function"){const _ch2=chartHTML;chartHTML=function(it){return colorRowHTML(it)+_ch2(it)};window.chartHTML=chartHTML}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-dco]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;const c=b.dataset.dco;
+  it.optColor=colorN(c)===colorN(it.optColor||"")?"":c;(it.sellers||[]).forEach(x=>{if(x.stockBy){const st=stockFor(x,it.optColor);if(st)x.stock=st}});
+  if(!it.color||it.colorAuto){const h=hexOfName(it.optColor);if(h){it.color=h;it.colorAuto=true}}it.upd=Date.now();if(typeof pushWatch==="function")pushWatch();dtSave(it,it.optColor?`${it.optColor} 재고로 보여요`:"색상 선택을 풀었어요")});
+
 })();
 
 /* 판매처 꾹 누르면 링크 복사 */

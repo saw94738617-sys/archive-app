@@ -74,7 +74,7 @@ public class AlertWorker extends Worker {
                     if (!url.startsWith("http")) continue;
                     checked++;
                     Read r;
-                    try { r = read(url); } catch (Exception e) { continue; }
+                    try { r = read(url, it.optString("color", "")); } catch (Exception e) { continue; }
                     JSONObject before = s.optJSONObject("stock");
                     String priceStr = r.price != null ? fmtPrice(r.price, r.currency) : "";
                     long np = priceNum(priceStr), bp = priceNum(s.optString("price", ""));
@@ -161,7 +161,19 @@ public class AlertWorker extends Worker {
         return "unk";
     }
 
-    static Read read(String url) throws Exception {
+    static String cn(String c) { return c == null ? "" : c.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT); }
+    /** 고른 색상과 맞는지 (색 정보가 없으면 통과) */
+    static boolean colorOk(String want, String cand) {
+        if (want == null || want.isEmpty() || cand == null || cand.trim().isEmpty()) return true;
+        String w = cn(want), c = cn(cand); return c.equals(w) || c.contains(w) || w.contains(c);
+    }
+    static Read read(String url, String color) throws Exception {
+        Read r = read0(url, color);
+        if (r.stock.isEmpty() && color != null && !color.isEmpty()) r = read0(url, ""); // 그 색을 못 찾으면 전체로
+        return r;
+    }
+    static Read read(String url) throws Exception { return read0(url, ""); }
+    static Read read0(String url, String color) throws Exception {
         String html = get(url);
         Read r = new Read();
         Map<String, String> ldStock = new LinkedHashMap<>();
@@ -174,7 +186,7 @@ public class AlertWorker extends Worker {
                 for (JSONObject p : prods) {
                     List<JSONObject> offers = new ArrayList<>(); addOffers(p.opt("offers"), null, offers);
                     JSONArray vars = p.optJSONArray("hasVariant");
-                    if (vars != null) for (int i = 0; i < vars.length(); i++) { JSONObject v = vars.optJSONObject(i); if (v != null) addOffers(v.opt("offers"), v, offers); }
+                    if (vars != null) for (int i = 0; i < vars.length(); i++) { JSONObject v = vars.optJSONObject(i); if (v != null && colorOk(color, v.optString("color", ""))) addOffers(v.opt("offers"), v, offers); }
                     for (JSONObject o : offers) {
                         if (r.price == null && (o.has("price") || o.has("lowPrice"))) {
                             String pr = o.has("price") ? o.optString("price") : o.optString("lowPrice");
@@ -208,7 +220,8 @@ public class AlertWorker extends Worker {
                     Object ovo = o.opt("option_value_orginal");
                     String val = ovo instanceof JSONArray ? ((JSONArray) ovo).optString(0, "") : o.optString("option_value", o.optString("option_name", ""));
                     if (val.isEmpty()) continue;
-                    String[] parts = val.split("[-/,]"); String k = sizeKey(parts[parts.length - 1]);
+                    String[] parts = val.split("\\s*[-/,]\\s*"); String k = sizeKey(parts[parts.length - 1]);
+                    if (parts.length > 1) { StringBuilder col = new StringBuilder(); for (int pi = 0; pi < parts.length - 1; pi++) col.append(pi > 0 ? " " : "").append(parts[pi].trim()); if (!colorOk(color, col.toString())) continue; }
                     boolean selling = !"F".equals(o.optString("is_selling", "T")) && !"F".equals(o.optString("is_display", "T"));
                     Object us = o.opt("use_stock"); boolean useSt = Boolean.TRUE.equals(us) || "T".equals(String.valueOf(us));
                     boolean noAuto = "F".equals(o.optString("is_auto_soldout")) || "F".equals(o.optString("use_soldout"));
@@ -234,6 +247,8 @@ public class AlertWorker extends Worker {
                     JSONObject v = vs.getJSONObject(i); String sz = null;
                     for (String f : new String[]{"option1", "option2", "option3"}) { String o = v.optString(f, ""); if (o.trim().toUpperCase(Locale.ROOT).matches("XX?S|XX?L|XXXL|[SML]|FREE|F|\\d{1,3}(\\.\\d)?|US ?\\d+(\\.5)?")) { sz = o; break; } }
                     if (sz == null) sz = v.optString("option3", v.optString("option2", v.optString("option1", v.optString("title"))));
+                    StringBuilder col = new StringBuilder(); for (String f : new String[]{"option1", "option2", "option3"}) { String o = v.optString(f, ""); if (!o.isEmpty() && !o.equals(sz)) col.append(col.length() > 0 ? " / " : "").append(o); }
+                    if (!colorOk(color, col.toString())) continue;
                     String k = sizeKey(sz); r.stock.put(k, "in".equals(r.stock.get(k)) ? "in" : (v.optBoolean("available") ? "in" : "out"));
                 }
             } catch (Exception ignored) {}
