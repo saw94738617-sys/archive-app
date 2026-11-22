@@ -95,7 +95,7 @@ async function imageAsDataURL(url,max){const b=await getImageBlob(url);let s=b;t
 const absUrl=(u,base)=>{try{return new URL(u,base).href}catch(e){return ""}};
 const clean=s=>String(s||"").replace(/\s+/g," ").trim();
 const CUR={KRW:"₩",JPY:"¥",USD:"$",EUR:"€",GBP:"£"};
-function sizeKey(s){s=clean(s).toUpperCase();const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
+function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
 function availOf(v){v=String(v||"").toLowerCase();if(/instock|in_stock|limitedavailability|presale|preorder/.test(v))return "in";if(/outofstock|out_of_stock|soldout|discontinued/.test(v))return "out";return "unk"}
 
 function parseLD(doc){const out=[];doc.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{const j=JSON.parse(s.textContent.trim());const walk=x=>{if(!x)return;if(Array.isArray(x))return x.forEach(walk);if(typeof x!=="object")return;if(x["@graph"])walk(x["@graph"]);const t=x["@type"];if(t==="Product"||(Array.isArray(t)&&t.includes("Product"))||t==="ProductGroup")out.push(x);if(x.hasVariant)walk(x.hasVariant)};walk(j)}catch(e){}});return out}
@@ -153,6 +153,7 @@ async function readProduct(url){
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
+  try{P.sizePairs=sizePairsFrom((doc.body&&doc.body.textContent||"").replace(/\s+/g," "))}catch(e){}
   /* 상세 설명 이미지 (사이즈표가 사진으로 들어간 쇼핑몰이 많아요) */
   {const seen=new Set(P.images);P.detail=[...new Set([...doc.querySelectorAll("#prdDetail img, .cont img, .detail img, .detailArea img, .prd-detail img, [class*=detail] img, [class*=Detail] img, .product-description img, .product__description img, .rte img")]
     .map(im=>absUrl(im.getAttribute("ec-data-src")||im.getAttribute("data-src")||im.getAttribute("src"),url)).filter(u=>u&&/^https?:/.test(u)&&!/\.gif(\?|$)|(logo|icon|sprite|blank|spacer|btn_|ico_)/i.test(u)))].slice(0,12)}
@@ -198,7 +199,7 @@ async function realFetch(){
       return}
     const P=await readProduct(v);
     if(!P.chart&&P.detail&&P.detail.length&&OCR){$("fetchStatus").innerHTML='<span class="spin"></span>상세 이미지에서 사이즈표 찾는 중…';try{const r=await chartFromDetail(P.detail);if(r){P.chart=r.chart;P.chartImg=r.img}}catch(e){}}
-    if(!P.chart&&P.stock){const c=shoeChart(Object.keys(P.stock));if(c){P.chart=c;P.chartGen=true}}
+    if(!P.chart&&(P.stock||P.sizePairs)){const c=shoeChart(Object.keys(P.stock||P.sizePairs),recCat==="shoes"||SHOE_RE.test(P.name||"")||!!P.sizePairs,P.sizePairs);if(c){P.chart=c;P.chartGen=true}}
     addSeller(v);const s=recSellers.find(x=>x.url===v);
     if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stock){s.stock=P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
     const fill=[];
@@ -1066,10 +1067,27 @@ async function fromShot(dataUrl){if(!rec.classList.contains("on")){openRec();set
   st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요")}
 window.archiveShot={read:readShot,from:fromShot};
 /* ---------- 27) 사이즈표 자동 채우기: 상세 이미지 글자 읽기 · 신발은 옵션 사이즈로 나라별 표 ---------- */
-function shoeChart(keys){const ks=(keys||[]).map(k=>String(k).trim()).filter(k=>/^\d{3}$/.test(k)&&+k>=200&&+k<=320).sort((a,b)=>a-b);
-  if(ks.length<2||typeof SIZE==="undefined")return null;const R=SIZE.shoes.rows;
+const SHOE_RE=/부츠|부트|boots?\b|shoes?\b|sneakers?|스니커|로퍼|loafer|구두|더비|derby|옥스퍼드|oxford|샌들|sandal|슬리퍼|뮬|워커|engineer|엔지니어|chukka|처커|モンキー|ブーツ|シューズ|vaudeville/i;
+/* 신발 사이즈 옵션(mm · cm · US) → 나라별 표. pairs: 쇼핑몰이 적어 둔 'US 8 : 260' 같은 브랜드 기준 */
+function shoeChart(keys,isShoe,pairs){const R=typeof SIZE!=="undefined"?SIZE.shoes.rows:null;if(!R)return null;
+  const P=pairs||{};const usLabel={};
+  const toMM=k=>{const t=String(k).trim().toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");let m;
+    if(P[t])return P[t];
+    if((m=t.match(/(\d{2}(?:\.\d)?)\s*CM/)))return Math.round(+m[1]*10);
+    if(/^\d{3}$/.test(t)&&+t>=200&&+t<=320)return +t;
+    if(!isShoe)return null;
+    if((m=t.match(/^(?:US\s*)?(\d{1,2}(?:\.5)?)$/))&&+m[1]>=4&&+m[1]<=15){const p=parseSize("shoes","US "+m[1]);return p?+R.KR[p.idx]:null}
+    if((m=t.match(/^(?:EU\s*)?(\d{2}(?:\.5)?)$/))&&+m[1]>=35&&+m[1]<=50){const p=parseSize("shoes","EU "+m[1]);return p?+R.KR[p.idx]:null}
+    return null};
+  const mm=[];(keys||[]).forEach(k=>{const v=toMM(k);if(v&&!mm.includes(v)){mm.push(v);const t=String(k).trim().replace(/(\d{1,2})\s*1\/2/,"$1.5");if(/^(US\s*)?\d{1,2}(\.5)?$/i.test(t)||P[t.toUpperCase()])usLabel[v]=t.replace(/^US\s*/i,"")}});
+  mm.sort((a,b)=>a-b);if(mm.length<2)return null;const ks=mm.map(String);
   const at=(sys,k)=>{const p=parseSize("shoes",k+"mm");return p&&p.idx>=0?R[sys][p.idx]:""};
-  return {cols:ks,rows:[["발 길이(mm)",...ks],["JP(cm)",...ks.map(k=>(+k/10).toString())],["US",...ks.map(k=>at("US",k))],["UK",...ks.map(k=>at("UK",k))],["EU",...ks.map(k=>at("EU",k))]]}}
+  return {cols:ks,rows:[["발 길이(mm)",...ks],["JP(cm)",...ks.map(k=>(+k/10).toString())],["US",...ks.map(k=>usLabel[k]||at("US",k))],["UK",...ks.map(k=>at("UK",k))],["EU",...ks.map(k=>at("EU",k))]]}}
+/* 상품 설명 글의 '8 : 260  8 1/2 : 265' 같은 사이즈 대응 */
+function sizePairsFrom(text){const t=String(text||"").replace(/(\d{1,2})\s*1\/2/g,"$1.5");const P={};let n=0;
+  const re=/(?:US\s*)?(\d{1,2}(?:\.5)?)\s*[:=→\-]\s*(\d{3})(?:\s*mm)?/gi;let m;
+  while((m=re.exec(t))){const a=+m[1],b=+m[2];if(a>=4&&a<=15&&b>=200&&b<=320){P[m[1]]=b;P["US "+m[1]]=b;n++}}
+  return n>=2?P:null}
 const SZ_WORD=/사이즈|SIZE|실측|총장|어깨|가슴|허리|발볼|발길이|굽|소매|기장|width|length/i;
 async function slicesOf(url){const b=await getImageBlob(url);const bm=await createImageBitmap(b);const W=bm.width,H=bm.height;if(W<200||H<150)return [];
   const k=Math.min(1,1200/W),sw=Math.round(W*k),step=1600,out=[];const total=Math.round(H*k);
@@ -1082,7 +1100,7 @@ async function chartFromDetail(urls){let n=0;
       if(!SZ_WORD.test(r.text||""))continue;const c=chartFromRows(wordsToRows(r.words));
       if(c&&c.rows.length&&c.cols.length){devLog({k:"ok",host:"상세 이미지 사이즈표",msg:`${c.cols.join("/")} · ${c.rows.map(x=>x[0]).join("/")}`});return {chart:c,img:d}}}}
   return null}
-window.archiveChart={shoeChart,chartFromDetail};
+window.archiveChart={shoeChart,chartFromDetail,sizePairsFrom,sizeKey};
 /* 이미 저장한 옷도 사이즈표 채우기: 상세 화면 버튼 · 설정에서 한꺼번에 */
 const isGenChart=c=>!!(c&&c.rows&&c.rows[0]&&c.rows[0][0]==="발 길이(mm)"&&c.rows.some(r=>r[0]==="JP(cm)"));
 const hasChart=it=>!!(it.chart&&it.chart.rows&&it.chart.rows.some(r=>r.slice(1).some(Boolean)));
@@ -1096,15 +1114,17 @@ async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=s
       try{for(const c of await searchShop(o,q)){const sc=Math.max(simName(it.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}}catch(e){}
       if(!best)why.push("공식몰에서 같은 상품을 못 찾았어요");
       if(best){urls.push(best.url);if(!(it.sellers||[]).some(x=>x.url===best.url)){it.sellers=it.sellers||[];it.sellers.push({url:best.url,shop:new URL(o).hostname.replace(/^www\./,""),price:"",stock:null})}}}}
-  let gen=null,stockKeys=new Set();(it.sellers||[]).forEach(x=>x.stock&&Object.keys(x.stock).forEach(k=>stockKeys.add(k)));
+  let gen=null,pairs=null,stockKeys=new Set();(it.sellers||[]).forEach(x=>x.stock&&Object.keys(x.stock).forEach(k=>stockKeys.add(k)));
   for(const u of urls){if(tried.has(u))continue;tried.add(u);say("쇼핑몰 페이지 읽는 중…");let P;try{P=await readProduct(u)}catch(e){why.push(`${originOf(u).replace(/^https?:\/\/(www\.)?/,"")} 페이지를 못 읽었어요`);continue}
     if(P.stock)Object.keys(P.stock).forEach(k=>stockKeys.add(k));
+    if(P.sizePairs){pairs=pairs||P.sizePairs;Object.keys(P.sizePairs).forEach(k=>stockKeys.add(k))}
     if(P.chart)return {chart:P.chart,how:"쇼핑몰 사이즈표"};
     if(P.detail&&P.detail.length&&OCR){say("상세 이미지에서 사이즈표 찾는 중…");try{const r=await chartFromDetail(P.detail);if(r)return {chart:r.chart,img:r.img,how:"상세 이미지"}}catch(e){}}}
   if(it.chartImg&&OCR){say("저장된 사이즈표 사진 읽는 중…");try{const r=await OCR.read({data:it.chartImg});const c=chartFromRows(wordsToRows(r.words));if(c&&c.rows.length)return {chart:c,how:"사이즈표 사진"}}catch(e){}}
-  gen=shoeChart([...stockKeys]);if(gen)return {chart:gen,how:"사이즈 옵션(나라별 환산)",gen:true};
+  const isShoe=it.c==="shoes"||SHOE_RE.test(it.name||"")||!!pairs;
+  gen=shoeChart([...stockKeys],isShoe,pairs);if(gen)return {chart:gen,how:pairs?"쇼핑몰 사이즈 대응(나라별 환산)":"사이즈 옵션(나라별 환산)",gen:true};
   /* 신발: 쇼핑몰을 못 읽어도 일반 나라별 환산표 (내 사이즈 주변) */
-  const shoeLike=it.c==="shoes"||/^\d{3}$/.test(String(it.size||"").trim());
+  const shoeLike=it.c==="shoes"||SHOE_RE.test(it.name||"")||/^\d{3}$/.test(String(it.size||"").trim());
   if(shoeLike&&typeof SIZE!=="undefined"){const K=SIZE.shoes.rows.KR;let i=K.indexOf(String(parseInt(it.size)||""));const a=i>=0?Math.max(0,i-3):2,b=Math.min(K.length,a+7);
     gen=shoeChart(K.slice(a,b));if(gen)return {chart:gen,how:"일반 신발 환산표"+(why.length?" ("+why[0]+")":""),gen:true}}
   return null}
