@@ -447,14 +447,28 @@ if(NATIVE&&G.on)setTimeout(()=>{uploadBackup(false).then(()=>{G.err="";saveG();i
 /* ---------- 10) 다른 판매처 찾기 (내가 쓰는 몰 안에서 검색) ---------- */
 const SHOPK="archive-shops";
 const BIG=/(^|\.)(naver\.com|coupang\.com|musinsa\.com|29cm\.co\.kr|wconcept\.co\.kr|kream\.co\.kr|ssfshop\.com|zozo\.jp|amazon\.|rakuten\.co\.jp|google\.)/;
-function shopStore(){try{return JSON.parse(localStorage.getItem(SHOPK)||'{"add":[],"off":[]}')}catch(e){return {add:[],off:[]}}}
+function shopStore(){let v;try{v=JSON.parse(localStorage.getItem(SHOPK)||"null")}catch(e){}v=v||{};v.add=v.add||[];v.off=v.off||[];v.ok=v.ok||[];v.terms=v.terms||{};return v}
 function shopSave(v){try{localStorage.setItem(SHOPK,JSON.stringify(v))}catch(e){}}
 const originOf=u=>{try{const x=new URL(u);return x.origin}catch(e){return ""}};
-function shopOrigins(excl){const st=shopStore(),set=new Set();
+/* 후보: 내 옷의 판매처 + 직접 추가한 쇼핑몰 (큰 플랫폼 · 약관 금지 사이트 제외) */
+function shopCands(excl){const st=shopStore(),set=new Set();
   ITEMS.forEach(it=>(it.sellers||[]).forEach(sl=>{const o=originOf(sl.url);if(o)set.add(o)}));
-  (st.add||[]).forEach(o=>set.add(o));
+  st.add.forEach(o=>set.add(o));
   const ex=new Set((excl||[]).map(originOf));
-  return [...set].filter(o=>!ex.has(o)&&!(st.off||[]).includes(o)&&!BIG.test(new URL(o).hostname))}
+  return [...set].filter(o=>{if(ex.has(o))return false;let h="";try{h=new URL(o).hostname}catch(e){return false}return !BIG.test(h)&&!(typeof NOFETCH!=="undefined"&&NOFETCH.test(h))})}
+/* 실제로 검색하는 곳: 약관 확인 후 허용된 쇼핑몰만 */
+function shopOrigins(excl){const st=shopStore();return shopCands(excl).filter(o=>st.ok.includes(o)&&!st.off.includes(o))}
+/* 약관 확인: 쇼핑몰 약관 페이지를 한 번 읽고 자동 수집 금지 문구가 있는지 찾아요 */
+const BAN_RE=/(크롤러|크롤링|스크래핑|스파이더|로봇\s*\(|로봇|매크로|자동화된\s*(수단|프로그램|방법|도구)|자동화\s*프로그램|데이터\s*마이닝|무단\s*수집|crawl|scrap|spider|robot|data\s*mining|automated\s*(means|access|tool|system))/i;
+function termsCands(o){return [o+"/member/agreement.html",o+"/policies/terms-of-service",o+"/pages/terms-of-service",o+"/terms",o+"/agreement",o+"/policy/terms"]}
+async function checkTerms(o){const st=shopStore();let res={result:"unknown",url:"",snip:"",at:Date.now()};
+  for(const u of termsCands(o)){try{const html=await getText(u);const doc=new DOMParser().parseFromString(html,"text/html");doc.querySelectorAll("script,style,noscript").forEach(n=>n.remove());
+      const txt=clean(doc.body?doc.body.textContent:"");if(txt.length<400||!/(약관|이용|terms|conditions)/i.test(txt))continue;
+      const m=txt.match(BAN_RE);if(m){const i=Math.max(0,m.index-40);res={result:"ban",url:u,snip:txt.slice(i,i+120),at:Date.now()}}else res={result:"clear",url:u,snip:"",at:Date.now()};break}catch(e){}}
+  st.terms[o]=res;if(res.result==="ban"){st.ok=st.ok.filter(x=>x!==o)}else if(res.result==="clear"&&!st.off.includes(o)&&!st.ok.includes(o))st.ok.push(o);shopSave(st);
+  devLog({k:res.result==="ban"?"fail":"ok",host:new URL(o).hostname,msg:"약관 확인: "+({ban:"자동 수집 금지 문구 있음",clear:"금지 문구 없음",unknown:"약관을 못 찾음"})[res.result]});return res}
+async function prepShops(excl,onProg){const st=shopStore();const todo=shopCands(excl).filter(o=>!st.terms[o]);let d=0;
+  for(const o of todo){onProg&&onProg(++d,todo.length);await checkTerms(o)}}
 const normN=t=>String(t||"").toLowerCase().replace(/[^0-9a-z가-힣]+/g," ").trim();
 const toks=t=>normN(t).split(" ").filter(w=>w.length>=2);
 function simName(a,b){const A=toks(a),B=new Set(toks(b));if(!A.length)return 0;return A.filter(w=>B.has(w)).length/A.length}
@@ -475,21 +489,60 @@ async function findOthers(name,brand,exclUrls,onProg){const origins=shopOrigins(
     catch(e){}finally{done++;onProg&&onProg(done,origins.length,found)}};
   const queue=[...origins];await Promise.all([0,1,2].map(async()=>{while(queue.length)await work(queue.shift())}));
   devLog({k:"ok",host:"다른 판매처 찾기",msg:`"${q}" · ${origins.length}곳 검색 · ${found.length}곳 찾음`});
-  return {origins,found:found.sort((a,b)=>b.score-a.score),q}}
+  const st=shopStore(),cs=shopCands(exclUrls);
+  return {origins,found:found.sort((a,b)=>b.score-a.score),q,pending:cs.filter(o=>!st.ok.includes(o)&&!st.off.includes(o)&&(!st.terms[o]||st.terms[o].result==="unknown")).length,banned:cs.filter(o=>st.terms[o]&&st.terms[o].result==="ban").length}}
 function stockLine(st){return st?Object.entries(st).map(([k,v])=>k+(v==="in"?"✓":v==="out"?"✕":"?")).join(" "):""}
 function altHTML(res,addedUrls){const names=res.origins.map(o=>new URL(o).hostname.replace(/^www\./,""));
   return `${res.found.length?res.found.map((f,i)=>`<div class="altr"><div class="altn"><b>${escH(f.shop)}</b><small>${escH(f.name)}</small>${f.stock?`<small class="alts">${escH(stockLine(f.stock))}</small>`:""}</div><span class="altp">${escH(f.price||"")}</span>${addedUrls.includes(f.url)?`<span class="altok">추가됨</span>`:`<button type="button" class="altadd" data-alt="${i}">＋ 추가</button>`}</div>`).join(""):`<p class="altnone">${res.origins.length?"내 몰들에서 같은 상품을 못 찾았어요":"아직 찾아볼 몰이 없어요"}</p>`}
-    <p class="altfoot">찾아본 몰 ${res.origins.length}곳${names.length?" · "+escH(names.slice(0,4).join(", "))+(names.length>4?" 외":""):""} · 검색어 "${escH(res.q)}" <button type="button" class="altshop" data-altshop>몰 추가</button></p>`}
-function askShop(){const u=prompt("판매처 몰 주소를 넣어주세요 (예: https://havati.co.kr)");if(!u)return false;const o=originOf(/^https?:/.test(u)?u:"https://"+u);if(!o){toast("주소를 확인해 주세요");return false}
-  const st=shopStore();if(!st.add.includes(o))st.add.push(o);st.off=(st.off||[]).filter(x=>x!==o);shopSave(st);toast("몰을 추가했어요 · 다음 검색부터 여기서도 찾아요");return true}
+    <p class="altfoot">찾아본 쇼핑몰 ${res.origins.length}곳${names.length?" · "+escH(names.slice(0,4).join(", "))+(names.length>4?" 외":""):""} · 검색어 "${escH(res.q)}"${res.pending?` · <b>약관 확인 필요 ${res.pending}곳</b>`:""}${res.banned?` · 약관상 제외 ${res.banned}곳`:""} <button type="button" class="altshop" data-altshop>쇼핑몰 관리</button></p>`}
+function askShop(){const u=prompt("쇼핑몰 주소를 넣어주세요 (예: https://myshop.co.kr)");if(!u)return false;const o=originOf(/^https?:/.test(u)?u:"https://"+u);if(!o){toast("주소를 확인해 주세요");return false}
+  const st=shopStore();if(!st.add.includes(o))st.add.push(o);st.off=(st.off||[]).filter(x=>x!==o);shopSave(st);toast("쇼핑몰을 추가했어요 · 약관 확인 뒤 검색에 써요");return true}
 window.archiveFindOthers=findOthers;
 
-/* 다른 판매처: 앱이 여러 쇼핑몰에 자동으로 접속하지 않고, 네이버 쇼핑 검색을 열어서 내가 직접 고르기 */
+/* 다른 판매처 찾기: 버튼을 눌렀을 때만, 약관 확인된 내 쇼핑몰에서만 */
 function naverShopUrl(q){return "https://search.shopping.naver.com/search/all?query="+encodeURIComponent(q)}
-document.addEventListener("click",e=>{const b=e.target.closest("#dtAlt");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
-  const q=[it.brand,it.name].filter(Boolean).join(" ").trim();if(!q){toast("이름이 있어야 찾을 수 있어요");return}
-  window.open(naverShopUrl(q),"_blank","noopener");toast("마음에 드는 판매처 링크를 복사해서 '수정 › 판매처'에 붙여넣어 주세요")},true);
-const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="네이버에서 찾기 ↗";h.appendChild(b)}}catch(e){}};
+function termsBadge(o){const st=shopStore(),t=st.terms[o];if(t&&t.result==="ban")return '<span class="tb ban">약관상 금지</span>';if(st.off.includes(o))return '<span class="tb off">안 씀</span>';if(st.ok.includes(o))return '<span class="tb ok">검색에 씀</span>';return '<span class="tb q">확인 필요</span>'}
+function openShopMgr(after){openEd("쇼핑몰 관리",()=>{const paint=()=>{const st=shopStore(),cs=shopCands([]);
+    $("edBody").innerHTML=`<p class="note">다른 판매처 찾기는 <b>약관에서 자동 수집을 금지하지 않은 쇼핑몰</b>에서만 해요. 약관을 읽어서 금지 문구(크롤링 · 로봇 · 매크로 · 자동화된 수단 등)가 있으면 빼요.</p>
+      ${cs.length?cs.map(o=>{const t=st.terms[o],h=new URL(o).hostname.replace(/^www\./,"");return `<div class="smr"><div class="smn"><b>${escH(h)}</b> ${termsBadge(o)}${t&&t.snip?`<small>"…${escH(t.snip)}…"</small>`:t&&t.result==="unknown"?`<small>약관 페이지를 찾지 못했어요 · 직접 확인한 뒤 허용해 주세요</small>`:""}</div>
+        <div class="smb"><button type="button" data-tv="${o}">약관 보기 ↗</button><button type="button" data-tc="${o}">다시 확인</button>${t&&t.result==="ban"?"":st.ok.includes(o)?`<button type="button" data-toff="${o}">빼기</button>`:`<button type="button" class="p" data-ton="${o}">허용</button>`}</div></div>`}).join(""):'<p class="note">아직 쇼핑몰이 없어요. 링크로 옷을 추가하면 그 쇼핑몰이 여기 생겨요.</p>'}
+      <button type="button" class="altgo" data-altshop2>＋ 쇼핑몰 주소로 추가</button>
+      <p class="note" style="margin-top:12px">무신사 · 29CM · 쿠팡 · 네이버 같은 큰 곳은 약관상 처음부터 빠져 있어요.</p>`};
+    paint();
+    $("edBody").onclick=async ev=>{const g=k=>{const b=ev.target.closest(`[${k}]`);return b?b.getAttribute(k):""};let o;
+      if((o=g("data-tv"))){const t=shopStore().terms[o];window.open((t&&t.url)||o,"_blank","noopener");return}
+      if((o=g("data-tc"))){ev.target.textContent="확인 중…";await checkTerms(o);paint();return}
+      if((o=g("data-ton"))){const st=shopStore();st.off=st.off.filter(x=>x!==o);if(!st.ok.includes(o))st.ok.push(o);shopSave(st);paint();return}
+      if((o=g("data-toff"))){const st=shopStore();st.ok=st.ok.filter(x=>x!==o);if(!st.off.includes(o))st.off.push(o);shopSave(st);paint();return}
+      if(ev.target.closest("[data-altshop2]")){if(askShop()){const st=shopStore();const o2=st.add[st.add.length-1];await checkTerms(o2);paint()}}}},()=>{after&&after()})}
+async function runFind(name,brand,urls,out){if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return null}if(!name){toast("이름이 있어야 찾을 수 있어요");return null}
+  out.innerHTML='<p class="altnone"><span class="spin"></span>쇼핑몰 약관 확인 중…</p>';
+  await prepShops(urls,(d,t)=>{const p=out.querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>쇼핑몰 약관 확인 중… ${d}/${t}`});
+  out.innerHTML='<p class="altnone"><span class="spin"></span>다른 판매처 찾는 중…</p>';
+  return await findOthers(name,brand,urls,(d,t)=>{const p=out.querySelector(".altnone");if(p)p.innerHTML=`<span class="spin"></span>다른 판매처 찾는 중… ${d}/${t}`})}
+/* 기록 화면 */
+let altRes=null;
+function ensureAltBox(){if($("altBox"))return;const nv=$("naverBtn");if(!nv)return;const d=document.createElement("div");d.id="altBox";d.className="altbox";
+  d.innerHTML='<button type="button" class="altgo" id="altGo">🔎 내 쇼핑몰에서 다른 판매처 찾기</button><div id="altOut"></div>';nv.parentElement.insertBefore(d,nv)}
+async function runAltRec(){ensureAltBox();const r=await runFind($("fName").value.trim(),$("fBrand").value.trim(),recSellers.map(x=>x.url),$("altOut"));if(!r)return;altRes=r;$("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url))}
+document.addEventListener("click",e=>{
+  if(e.target.closest("#altGo")){runAltRec();return}
+  const ad=e.target.closest("#altOut [data-alt]");if(ad&&altRes){const f=altRes.found[+ad.dataset.alt];if(f&&addSeller(f.url)){const sl=recSellers.find(x=>x.url===f.url);if(sl){sl.shop=f.shop;sl.price=f.price;if(f.stock){sl.stock=f.stock;sl.checked=stamp()}}renderSellers()}$("altOut").innerHTML=altHTML(altRes,recSellers.map(x=>x.url));return}
+  if(e.target.closest("#altOut [data-altshop]")){openShopMgr();return}
+});
+const _rs4=renderSellers;renderSellers=function(){_rs4();ensureAltBox()};
+/* 상세 화면 */
+document.addEventListener("click",e=>{const nb=e.target.closest("#dtNaver");if(nb){const it=ITEMS.find(x=>x.id===dtId);if(it)window.open(naverShopUrl([it.brand,it.name].filter(Boolean).join(" ")),"_blank","noopener");return}
+  const b=e.target.closest("#dtAlt");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;if(!NATIVE){toast("다른 판매처 찾기는 앱에서 돼요");return}
+  let res=null;
+  openEd("다른 판매처 찾기",()=>{$("edBody").innerHTML=`<p class="note">${escH((it.brand?it.brand+" ":"")+it.name)}</p><div id="altOut2"></div>`;
+    const paint=()=>{$("altOut2").innerHTML=altHTML(res,(it.sellers||[]).map(x=>x.url))};
+    const run=async()=>{res=await runFind(it.name,it.brand,(it.sellers||[]).map(x=>x.url),$("altOut2"));if(res)paint()};
+    $("altOut2").onclick=ev=>{const ad=ev.target.closest("[data-alt]");if(ad&&res){const f=res.found[+ad.dataset.alt];it.sellers=it.sellers||[];if(!it.sellers.some(x=>x.url===f.url)){it.sellers.push({url:f.url,shop:f.shop,price:f.price,stock:f.stock||null,checked:f.stock?stamp():""});persistAll();toast(f.shop+" 추가했어요")}paint();return}
+      if(ev.target.closest("[data-altshop]")){openShopMgr(()=>{const it2=ITEMS.find(x=>x.id===dtId);if(it2)openDetail(it2.id)})}};
+    run()},()=>{reDetail()})},true);
+const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="＋ 판매처 찾기";h.appendChild(b);const n=document.createElement("button");n.type="button";n.className="st-ref";n.id="dtNaver";n.textContent="네이버 ↗";h.appendChild(n)}}catch(e){}};
+window.archiveShopMgr=openShopMgr;
 
 /* ---------- 11) 세부 카테고리 바로 추가 · 위시 순위 기본값 ---------- */
 function paintSubAdd(){const sc=$("subcats");if(!sc||sc.hidden||sc.querySelector(".subadd"))return;const b=document.createElement("button");b.type="button";b.className="subadd";b.textContent="＋ 직접 추가";sc.appendChild(b)}
