@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   build:
+    # 코드를 올리는 것만으로는 배포하지 않아요. 커밋 메시지에 [배포]가 있거나 직접 실행할 때만 새 버전을 만들어요.
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[배포]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
