@@ -565,9 +565,24 @@ window.archiveNotifPerm=notifPerm;
 document.addEventListener("click",e=>{if(e.target.closest('#ob [data-ob="notifyOn"]'))notifPerm(true)},true);
 if(NATIVE){setTimeout(async()=>{await bgSetup();let asked=false;try{asked=localStorage.getItem("archive-notifask")==="1"}catch(e){}
   if(!asked&&onboarded){try{localStorage.setItem("archive-notifask","1")}catch(e){}notifPerm(true)}},3000)}
-function addNotifRow(){const card=$("alTest")&&$("alTest").parentElement;if(!card||$("alPush"))return;const row=document.createElement("button");row.type="button";row.className="row";row.id="alPush";
-  row.innerHTML='<span class="lb">폰 알림<small id="alPushSub">새 버전이 나오면 폰 알림바로 알려줘요 · 1시간마다 확인</small></span><span class="val" id="alPushVal">…</span>';card.insertBefore(row,$("alTest"));
-  const paint=async(ask,os)=>{const v=await notifPerm(ask,os);$("alPushVal").textContent=v==="granted"?"켜짐":NATIVE?"허용하기":"앱에서만";};row.onclick=()=>paint(true,true);paint(false)}
+function addNotifRow(){const card=$("alTest")&&$("alTest").parentElement;if(!card||$("alPush"))return;
+  const mk=(id,lb,sub)=>{const r=document.createElement("button");r.type="button";r.className="row";r.id=id;r.innerHTML=`<span class="lb">${lb}<small id="${id}Sub">${sub}</small></span><span class="val" id="${id}Val"></span>`;card.insertBefore(r,$("alTest"));return r};
+  const row=mk("alPush","폰 알림","새 버전이 나오면 폰 알림바로 알려줘요 · 1시간마다 확인");
+  if(!NTP){$("alPushVal").textContent="앱에서만";return}
+  const rTest=mk("alPushTest","폰 알림 테스트","지금 알림바로 테스트 알림을 보내요");
+  const rNow=mk("alPushNow","지금 새 버전 확인","마지막 확인 기록을 불러오는 중…");
+  const rBat=mk("alPushBat","배터리 최적화 제외","폰이 알림 확인을 미루지 않게 해요");
+  const when=t=>{if(!t)return "아직 확인 기록이 없어요";const d=new Date(t);const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`};
+  const paint=async(ask,os)=>{let r;try{r=ask?await NTP.ask({openSettings:!!os}):await NTP.status()}catch(e){r={}}
+    const v=r.notifications;$("alPushVal").textContent=v==="granted"?"켜짐":"허용하기";
+    $("alPushNowSub").textContent=r.lastAt?`마지막 확인 ${when(r.lastAt)} · ${r.lastMsg||""}`:"아직 확인 기록이 없어요 · 눌러서 확인";
+    $("alPushBatVal").textContent=r.battery?"제외됨":"설정하기";return r};
+  row.onclick=()=>paint(true,true);
+  rTest.onclick=async()=>{let r={};try{r=await NTP.test()}catch(e){}if(r.sent)toast("알림바를 내려서 확인해 보세요");else{toast("알림 권한이 꺼져 있어요 · 허용해 주세요");paint(true,true)}};
+  rNow.onclick=async()=>{$("alPushNowSub").textContent="확인하는 중…";try{await NTP.checkNow()}catch(e){}setTimeout(()=>paint(false),5000)};
+  rBat.onclick=async()=>{try{await NTP.askBattery()}catch(e){}setTimeout(()=>paint(false),1500)};
+  if(AppP)AppP.addListener("resume",()=>paint(false));
+  paint(false)}
 const _rs3=renderSettings;renderSettings=function(){_rs3();addNotifRow()};addNotifRow();
 /* 설정 맨 아래 버전을 누르면 업데이트 확인 */
 if(ver){ver.title="눌러서 업데이트 확인";ver.addEventListener("click",()=>checkUpdate(true))}

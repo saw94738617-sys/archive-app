@@ -56,6 +56,7 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
           grep -q POST_NOTIFICATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$M"
+          grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n</manifest>#' "$M"
           grep -n "uses-permission" "$M"
 
       - name: 버전 번호 넣기 (덮어 설치되게)

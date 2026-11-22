@@ -1,7 +1,11 @@
 package com.archive.myclothes;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.PowerManager;
 import android.os.Build;
 import android.provider.Settings;
 import androidx.core.app.NotificationManagerCompat;
@@ -28,9 +32,18 @@ public class ArchiveNotifyPlugin extends Plugin {
         return "denied";
     }
 
+    private boolean batteryFree() {
+        PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+        return pm == null || pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+    }
+
     private void answer(PluginCall call) {
         JSObject r = new JSObject();
         r.put("notifications", state());
+        SharedPreferences sp = getContext().getSharedPreferences("archive_update", Context.MODE_PRIVATE);
+        r.put("lastAt", sp.getLong("lastAt", 0));
+        r.put("lastMsg", sp.getString("lastMsg", ""));
+        r.put("battery", batteryFree());
         call.resolve(r);
     }
 
@@ -57,6 +70,31 @@ public class ArchiveNotifyPlugin extends Plugin {
 
     @PluginMethod
     public void checkNow(PluginCall call) { checkSoon(); call.resolve(); }
+
+    @PluginMethod
+    public void test(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("sent", UpdateWorker.test(getContext()));
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void askBattery(PluginCall call) {
+        if (!batteryFree()) {
+            try {
+                Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getContext().getPackageName()));
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(i);
+            } catch (Exception e) {
+                try {
+                    Intent i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(i);
+                } catch (Exception ignored) {}
+            }
+        }
+        answer(call);
+    }
 
     private void checkSoon() {
         WorkManager.getInstance(getContext()).enqueue(new OneTimeWorkRequest.Builder(UpdateWorker.class).build());

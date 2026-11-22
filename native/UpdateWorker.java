@@ -42,6 +42,24 @@ public class UpdateWorker extends Worker {
         }
     }
 
+    static boolean test(Context ctx) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false;
+        ensureChannel(ctx);
+        Intent open = new Intent(ctx, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi = PendingIntent.getActivity(ctx, 7001, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        NotificationManagerCompat.from(ctx).notify(7001, new NotificationCompat.Builder(ctx, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_archive).setContentTitle("아카이브 테스트 알림")
+            .setContentText("새 버전이 나오면 이렇게 알림바로 와요").setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setColor(0xFF1F2A44).setContentIntent(pi).setAutoCancel(true).build());
+        return true;
+    }
+
+    static void mark(Context ctx, String msg) {
+        ctx.getSharedPreferences("archive_update", Context.MODE_PRIVATE).edit()
+            .putLong("lastAt", System.currentTimeMillis()).putString("lastMsg", msg).apply();
+    }
+
     @NonNull @Override
     public Result doWork() {
         Context ctx = getApplicationContext();
@@ -52,7 +70,8 @@ public class UpdateWorker extends Worker {
             h.setReadTimeout(15000);
             h.setRequestProperty("Accept", "application/vnd.github+json");
             h.setRequestProperty("User-Agent", "archive-app");
-            if (h.getResponseCode() != 200) return Result.success();
+            int code = h.getResponseCode();
+            if (code != 200) { mark(ctx, "서버 응답 " + code); return Result.success(); }
             StringBuilder sb = new StringBuilder();
             try (BufferedReader r = new BufferedReader(new InputStreamReader(h.getInputStream(), "UTF-8"))) {
                 String line; while ((line = r.readLine()) != null) sb.append(line).append('\n');
@@ -60,12 +79,13 @@ public class UpdateWorker extends Worker {
             JSONObject j = new JSONObject(sb.toString());
             String tag = j.optString("tag_name", "");
             Matcher m = Pattern.compile("(\\d+)$").matcher(tag);
-            if (!m.find()) return Result.success();
+            if (!m.find()) { mark(ctx, "버전 번호를 못 읽었어요"); return Result.success(); }
             long n = Long.parseLong(m.group(1));
             long cur = PackageInfoCompat.getLongVersionCode(ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0));
             SharedPreferences sp = ctx.getSharedPreferences("archive_update", Context.MODE_PRIVATE);
             long told = sp.getLong("notified", 0);
-            if (n <= cur || n <= told) return Result.success();
+            if (n <= cur) { mark(ctx, "최신 버전이에요"); return Result.success(); }
+            if (n <= told) { mark(ctx, "0.1." + n + " 알림은 이미 보냈어요"); return Result.success(); }
 
             String body = "눌러서 업데이트하세요";
             for (String s : j.optString("body", "").split("\n")) {
@@ -74,6 +94,7 @@ public class UpdateWorker extends Worker {
                 body = s.replaceFirst("^[-*]\\s*", ""); break;
             }
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                mark(ctx, "새 버전이 있지만 알림 권한이 꺼져 있어요");
                 return Result.success(); // 허용 전에는 보내지 않고, 허용 후 다음 확인 때 보내요
             }
             ensureChannel(ctx);
@@ -94,7 +115,9 @@ public class UpdateWorker extends Worker {
                 .setAutoCancel(true);
             NotificationManagerCompat.from(ctx).notify(7000, b.build());
             sp.edit().putLong("notified", n).apply();
+            mark(ctx, ver + " 알림을 보냈어요");
         } catch (Exception e) {
+            mark(ctx, "확인 실패: " + e.getClass().getSimpleName());
             return Result.retry();
         } finally {
             if (h != null) h.disconnect();
