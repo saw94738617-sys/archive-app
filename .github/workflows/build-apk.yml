@@ -52,6 +52,7 @@ jobs:
           mkdir -p android/app/src/main/res/drawable && cp native/res/drawable/*.xml android/app/src/main/res/drawable/
           grep -q "androidx.work:work-runtime" android/app/build.gradle || sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' android/app/build.gradle
           grep -n "work-runtime" android/app/build.gradle
+          sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.biometric:biometric:1.1.0"/' android/app/build.gradle
           # 푸시 알림(Firebase)
           sed -i '0,/^dependencies {/s//dependencies {\n    implementation platform("com.google.firebase:firebase-bom:33.7.0")\n    implementation "com.google.firebase:firebase-messaging"/' android/app/build.gradle
           if [ -f native/google-services.json ]; then cp native/google-services.json android/app/google-services.json; echo "google-services.json 넣음"; fi
@@ -61,6 +62,7 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
           grep -q POST_NOTIFICATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$M"
+          grep -q USE_BIOMETRIC "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n</manifest>#' "$M"
           grep -q REQUEST_IGNORE_BATTERY_OPTIMIZATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />\n</manifest>#' "$M"
           grep -n "uses-permission" "$M"
           grep -q UpdatePushService "$M" || sed -i 's#</application>#    <service android:name=".UpdatePushService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>\n    </application>#' "$M"

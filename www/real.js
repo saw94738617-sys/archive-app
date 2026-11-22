@@ -716,4 +716,34 @@ function syncAllBR(say){let added=[];for(const it of ITEMS){if(it.brSeen)continu
   return added}
 {const _rp=renderPins;renderPins=function(){const r=_rp.apply(this,arguments);try{if(syncAllBR(true).length)persistAll()}catch(e){}return r}}
 setTimeout(()=>{try{if(syncAllBR(false).length)persistAll()}catch(e){}},1500);
+
+/* ---------- 17) 지문으로 잠금 풀기 ---------- */
+const BIO=NATIVE?plug("ArchiveBio"):null;let bioOK=false;
+async function bioCheck(){if(!BIO)return false;try{const r=await BIO.available();bioOK=!!(r&&r.ok);return r}catch(e){bioOK=false;return null}}
+function bioKey(){const k=document.querySelector('#lkPad [data-k="bio"]');if(k)k.style.visibility=(bioOK&&sec.bio&&lk.mode==="verify")?"visible":"hidden"}
+let bioBusy=false;
+async function bioUnlock(){if(!BIO||!bioOK||!sec.bio||bioBusy||lk.mode!=="verify"||$("lock").hidden)return;bioBusy=true;
+  try{const r=await BIO.verify({title:"아카이브 잠금 해제",subtitle:"지문으로 열어요"});
+    if(r&&r.ok){$("lock").hidden=true;const cb=lk.cb;lk.cb=null;cb&&cb()}}catch(e){devLog({k:"err",msg:"지문: "+(e.message||e)})}finally{bioBusy=false}}
+{const _ap=askPin;askPin=function(mode){const r=_ap.apply(this,arguments);bioKey();if(mode==="verify")setTimeout(bioUnlock,250);return r}}
+$("lkPad").addEventListener("click",e=>{const b=e.target.closest('[data-k="bio"]');if(!b)return;e.stopImmediatePropagation();bioUnlock()},true);
+/* 설정 › 보안 › 지문으로 열기 */
+function bioRow(){if($("swBio"))return;const al=$("swAppLock");if(!al)return;const row=al.closest(".row");
+  const r=document.createElement("div");r.className="row";r.id="bioRow";
+  r.innerHTML=`<span class="lb">지문으로 열기<small id="bioSub">잠금을 풀 때 비밀번호 대신 지문</small></span><button class="sw" type="button" role="switch" aria-checked="${!!sec.bio}" id="swBio" aria-label="지문으로 열기"></button>`;
+  row.after(r);
+  $("swBio").onclick=async e=>{e.stopPropagation();
+    if(sec.bio){sec.bio=false;saveSec();$("swBio").setAttribute("aria-checked","false");bioKey();toast("지문 잠금 해제를 껐어요");return}
+    if(!BIO){toast("지문은 폰 앱에서만 돼요");return}
+    const a=await bioCheck();if(!bioOK){toast(a&&a.enrolled===false?"폰 설정에서 지문을 먼저 등록해 주세요":"이 폰에서는 지문을 쓸 수 없어요");return}
+    const go=async()=>{const v=await BIO.verify({title:"지문 등록 확인",subtitle:"지금 지문을 한 번 대 주세요"});
+      if(v&&v.ok){sec.bio=true;if(!sec.appLock)sec.appLock=true;saveSec();renderSec();$("swBio").setAttribute("aria-checked","true");toast("이제 지문으로 열 수 있어요")}else toast("지문 확인을 못 했어요")};
+    if(!sec.pin){toast("지문이 안 될 때 쓸 비밀번호 4자리를 먼저 정해요");setPinThen(go)}else go()};
+  if(!BIO){$("bioSub").textContent="폰 앱에서만 쓸 수 있어요"}}
+bioRow();
+bioCheck().then(()=>{bioKey();if(!$("lock").hidden&&lk.mode==="verify")bioUnlock()});
+/* 앱을 1분 넘게 나갔다 오면 다시 잠그기 */
+let _bgAt=0;
+if(NATIVE&&AppP){AppP.addListener("pause",()=>{_bgAt=Date.now()});
+  AppP.addListener("resume",()=>{if(sec.appLock&&sec.pin&&_bgAt&&Date.now()-_bgAt>60000&&$("lock").hidden)askPin("verify","비밀번호를 입력하세요",null,false);_bgAt=0})}
 })();
