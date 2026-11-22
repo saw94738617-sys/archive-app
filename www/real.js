@@ -571,12 +571,12 @@ function addNotifRow(){const card=$("alTest")&&$("alTest").parentElement;if(!car
   if(!NTP){$("alPushVal").textContent="앱에서만";return}
   const rTest=mk("alPushTest","폰 알림 테스트","지금 알림바로 테스트 알림을 보내요");
   const rNow=mk("alPushNow","지금 새 버전 확인","마지막 확인 기록을 불러오는 중…");
-  const rBat=mk("alPushBat","배터리 최적화 제외","폰이 알림 확인을 미루지 않게 해요");
+  const rBat=mk("alPushBat","배터리 최적화 제외","폰이 알림 확인을 미루지 않게 해요");const rHelp=mk("alPushBatHelp","그래도 앱을 켜야 알림이 오면","갤럭시 절전 예외 앱에 넣는 방법");
   const when=t=>{if(!t)return "아직 확인 기록이 없어요";const d=new Date(t);const p=n=>String(n).padStart(2,"0");return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`};
   const paint=async(ask,os)=>{let r;try{r=ask?await NTP.ask({openSettings:!!os}):await NTP.status()}catch(e){r={}}
     const v=r.notifications;$("alPushVal").textContent=v==="granted"?"켜짐":"허용하기";
     $("alPushNowSub").textContent=r.lastAt?`마지막 확인 ${when(r.lastAt)} · ${r.lastMsg||""}`:"아직 확인 기록이 없어요 · 눌러서 확인";
-    $("alPushBatVal").textContent=r.battery?"제외됨":"설정하기";return r};
+    $("alPushBatVal").textContent=r.battery?"제외됨":"설정하기";$("alPushBatVal").classList.toggle("warn",!r.battery);$("alPushBatSub").innerHTML=r.battery?"앱을 꺼도 알림이 와요":"<b style=\"color:#c8622d\">지금은 앱을 켜야 알림이 와요</b> · 눌러서 허용";return r};
   row.onclick=()=>paint(true,true);
   rTest.onclick=async()=>{let r={};try{r=await NTP.test()}catch(e){}if(r.sent)toast("알림바를 내려서 확인해 보세요");else{toast("알림 권한이 꺼져 있어요 · 허용해 주세요");paint(true,true)}};
   rNow.onclick=async()=>{$("alPushNowSub").textContent="확인하는 중…";try{await NTP.checkNow()}catch(e){}setTimeout(()=>paint(false),5000)};
@@ -656,4 +656,36 @@ $("dtBody").addEventListener("click",e=>{const it=ITEMS.find(x=>x.id===dtId);if(
   if(p){const n=+p.dataset.pp;if(prioNum(it.priority)===n)return;it.priority=n;dtSave(it,`${n}순위로 바꿨어요`);return}
 });
 const _od=openDetail;openDetail=function(){const r=_od.apply(this,arguments);try{const it=ITEMS.find(x=>x.id===dtId);if(it)dtPickers(it)}catch(e){devLog&&devLog({k:"err",msg:"상세 고르기: "+(e.message||e)})}return r};
+
+/* ---------- 14) 새 버전이 있으면 주황색 표시 (메뉴 · 설정 · 버전) ---------- */
+function markUpdate(){const on=!!pendingUpd;const mb=$("menuBtn");
+  if(mb){let d=mb.querySelector(".udot");if(on&&!d){d=document.createElement("i");d.className="udot";mb.appendChild(d)}if(!on&&d)d.remove()}
+  const os=$("openSet");if(os){let d=os.querySelector(".udot2");if(on&&!d){d=document.createElement("i");d.className="udot2";os.firstChild.after(d)}if(!on&&d)d.remove()}
+  const sb=document.querySelector("#settings .sbody");if(sb){let c=$("updCard");
+    if(on){if(!c){c=document.createElement("button");c.type="button";c.id="updCard";c.className="updcard";sb.prepend(c);c.onclick=()=>showUpdate()}
+      c.innerHTML=`<i class="dot"></i><span><b>새 버전 v${escH(pendingUpd.ver)}이 있어요</b><small>지금 v${escH(window.ARCHIVE_VERSION)} · 눌러서 업데이트</small></span><span class="go">업데이트</span>`}
+    else if(c)c.remove()}
+  const v=$("verTap");if(v){v.classList.toggle("verold",on);v.innerHTML="ARCHIVE v"+escH(window.ARCHIVE_VERSION||"0.1")+(window.ARCHIVE_DEV?" · DEV":"")+(on?` · 새 버전 v${escH(pendingUpd.ver)} 있어요`:" · 최신")+"<br>EST. 2026"}}
+const _cu=checkUpdate;checkUpdate=async function(manual){let quiet=false;if(manual==="quiet"){quiet=true;manual=false}
+  if(quiet){const keep=showUpdate;showUpdate=function(){};try{return await _cu(false)}finally{showUpdate=keep;markUpdate()}}
+  try{return await _cu(manual)}finally{markUpdate()}};
+/* 앱으로 돌아올 때마다(30분 간격) 조용히 다시 확인해서 표시만 새로 고쳐요 */
+if(NATIVE&&AppP)AppP.addListener("resume",()=>{const t=+(window.__lastQuiet||0);if(Date.now()-t>30*6e4){window.__lastQuiet=Date.now();checkUpdate("quiet")}});
+setTimeout(markUpdate,500);
+
+/* ---------- 15) 앱을 꺼도 알림이 오게: 갤럭시 절전 풀기 안내 ---------- */
+async function batteryNudge(force){if(!NTP)return;let r={};try{r=await NTP.status()}catch(e){return}
+  if(r.battery&&!force)return;if(!force){try{if(localStorage.getItem("archive-batnudge")==="1")return}catch(e){}}
+  if(r.notifications!=="granted"&&!force)return;
+  let s=$("batSheet");if(s)s.remove();s=document.createElement("div");s.id="batSheet";s.className="batsheet";
+  s.innerHTML=`<div role="dialog" aria-label="알림 설정"><h2>앱을 꺼도 알림이 오게 할게요</h2>
+    <p>갤럭시는 배터리를 아끼려고 잘 안 여는 앱을 재워서, 앱을 켤 때만 알림이 와요.</p>
+    <ol><li><b>허용하기</b>를 누르고 뜨는 창에서 <b>허용</b>을 눌러요</li><li>그래도 늦게 오면: 폰 설정 › 배터리 › 백그라운드 사용 제한 › <b>절전 예외 앱</b>에 '아카이브' 추가</li></ol>
+    <div class="bb"><button type="button" class="s" data-b="later">나중에</button><button type="button" class="p" data-b="ok">${r.battery?"이미 허용됐어요":"허용하기"}</button></div></div>`;
+  $("app").appendChild(s);
+  s.onclick=async e=>{const b=e.target.closest("[data-b]");if(!b&&e.target!==s)return;try{localStorage.setItem("archive-batnudge","1")}catch(x){}
+    if(b&&b.dataset.b==="ok"&&!r.battery){try{await NTP.askBattery()}catch(x){}}s.remove()}}
+setTimeout(()=>{const ob=$("ob"),gd=$("gd");if((!ob||ob.hidden)&&(!gd||gd.hidden))batteryNudge(false)},4000);
+const _bat=$("alPushBat");if(_bat){}
+document.addEventListener("click",e=>{if(e.target.closest("#alPushBatHelp"))batteryNudge(true)});
 })();
