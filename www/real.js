@@ -116,6 +116,17 @@ function findChart(doc){
       const labels=h.slice(1);return {cols:sizesCol.map(c=>c.toUpperCase()),rows:labels.map((l,li)=>[l.replace(/\(cm\)/i,"").trim(),...rows.slice(1).map(r=>(r[li+1]||"").replace(/cm/i,"").trim())])}}
   }return null}
 
+/* 상품 페이지에 보이는 사이즈 옵션의 '(품절)' 표시로 재고 읽기 (식스샵 등 · 누구나 보는 페이지 글자만 사용) */
+const OPT_RE=/^(XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.5)?|\d{1,2}(?:\s*1\/2|\.5)?|US ?\d{1,2}(?:\s*1\/2|\.5)?)\s*(?:[\[(]\s*(품절|일시 ?품절|sold ?out|out of stock)\s*[\])]|[-·:]\s*(품절|sold ?out))?$/i;
+function optionStock(doc){const groups=new Map();
+  doc.querySelectorAll("option, li, button, label, span, a, div, p").forEach(el=>{if(el.closest("table"))return;if(el.children.length&&el.tagName!=="OPTION")return;
+    const t=clean(el.textContent);if(!t||t.length>24)return;const m=t.match(OPT_RE);if(!m)return;
+    const par=el.tagName==="OPTION"?el.parentElement:(el.parentElement&&el.parentElement.parentElement)||el.parentElement;if(!par)return;
+    if(!groups.has(par))groups.set(par,[]);groups.get(par).push({k:sizeKey(m[1]),out:!!(m[2]||m[3])||/disabled|soldout|sold-out|품절/i.test((el.className||"")+" "+(el.getAttribute("disabled")!=null?"disabled":""))})});
+  let best=null;for(const [par,list] of groups){const ks=new Set(list.map(x=>x.k));if(ks.size<2)continue;
+    const anyOut=list.some(x=>x.out);const isSel=par.tagName==="SELECT";if(!anyOut&&!isSel)continue;
+    if(!best||ks.size>best.size||(anyOut&&!best.anyOut))best={list,size:ks.size,anyOut}}
+  if(!best)return null;const st={};best.list.forEach(x=>{st[x.k]=st[x.k]==="in"?"in":(x.out?"out":"in")});return st}
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const val=clean(o.option_value_orginal||o.option_value||o.option_name||"");if(!val)return;const parts=val.split(/[-/,]/).map(clean);const k=sizeKey(parts[parts.length-1]);
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
@@ -151,6 +162,7 @@ async function readProduct(url){
   if(Object.keys(st).length>1)P.stock=st;
   const c24=cafe24Stock(html);if(c24){if(!(P.stock&&Object.keys(P.stock).length>1))P.stock=c24;P.src.push("카페24 재고")}
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
+  if(!P.stock){const os=optionStock(doc);if(os){P.stock=os;P.src.push("옵션 품절 표시")}}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
   try{P.sizePairs=sizePairsFrom((doc.body&&doc.body.textContent||"").replace(/\s+/g," "))}catch(e){}
@@ -1313,3 +1325,14 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
 })();
+
+/* 판매처 꾹 누르면 링크 복사 */
+(()=>{let tm=null,fired=false,sx=0,sy=0;
+  const target=e=>{const a=e.target.closest(".srow2 a[href], .srow a[href], .srow .sn");if(!a)return null;if(a.classList.contains("sn")){const row=a.closest(".srow");const l=row&&row.querySelector("a[href]");return l?l.getAttribute("href"):null}return a.getAttribute("href")};
+  const copy=async u=>{try{await navigator.clipboard.writeText(u)}catch(e){const t=document.createElement("textarea");t.value=u;t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();try{document.execCommand("copy")}catch(_){}t.remove()}
+    if(navigator.vibrate)try{navigator.vibrate(25)}catch(_){}toast("링크를 복사했어요")};
+  document.addEventListener("pointerdown",e=>{const u=target(e);if(!u)return;fired=false;sx=e.clientX;sy=e.clientY;clearTimeout(tm);tm=setTimeout(()=>{fired=true;copy(u)},550)},true);
+  const stop=()=>{clearTimeout(tm)};document.addEventListener("pointerup",stop,true);document.addEventListener("pointercancel",stop,true);
+  document.addEventListener("pointermove",e=>{if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>12)stop()},true);
+  document.addEventListener("click",e=>{if(fired&&target(e)){e.preventDefault();e.stopImmediatePropagation();fired=false}},true);
+  document.addEventListener("contextmenu",e=>{if(target(e))e.preventDefault()},true)})();

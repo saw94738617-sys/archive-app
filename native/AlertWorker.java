@@ -151,7 +151,7 @@ public class AlertWorker extends Worker {
 
     static final Pattern SZ = Pattern.compile("(?:^|[\\s/·\\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\\d{2,3}(?:\\.\\d)?|\\d{1,2}(?:\\.5)?))(?=$|[\\s/·\\-_)])");
     static String sizeKey(String s) {
-        s = s == null ? "" : s.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT);
+        s = s == null ? "" : s.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT).replaceAll("(\\d{1,2})\\s*1/2", "$1.5");
         Matcher m = SZ.matcher(s); return m.find() ? m.group(1) : s;
     }
     static String avail(String v) {
@@ -239,6 +239,17 @@ public class AlertWorker extends Worker {
             } catch (Exception ignored) {}
         }
         if (r.stock.size() < 2 && ldStock.size() == 1) r.stock = ldStock;
+        if (r.stock.isEmpty()) {
+            // 상품 페이지에 보이는 사이즈 옵션 '(품절)' 표시 (식스샵 등) — 앱의 optionStock과 같은 규칙
+            Matcher om = Pattern.compile("<(option|li|button|label|span|a|div|p)\\b([^>]*)>\\s*((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\\d{2,3}(?:\\.5)?|\\d{1,2}(?:\\s*1/2|\\.5)?|US ?\\d{1,2}(?:\\s*1/2|\\.5)?))\\s*(?:[\\[(]\\s*(품절|일시 ?품절|sold ?out|out of stock)\\s*[\\])])?\\s*</\\1>", Pattern.CASE_INSENSITIVE).matcher(html.replaceAll("(?is)<table.*?</table>", ""));
+            Map<String, String> os = new LinkedHashMap<>(); boolean anyOut = false;
+            while (om.find()) {
+                boolean out = om.group(4) != null || om.group(2).matches("(?is).*(disabled|soldout|sold-out|품절).*");
+                String k = sizeKey(om.group(3)); anyOut |= out;
+                os.put(k, "in".equals(os.get(k)) ? "in" : (out ? "out" : "in"));
+            }
+            if (os.size() >= 2 && anyOut) r.stock = os;
+        }
         if (r.currency.isEmpty()) { String host = new URL(url).getHost(); r.currency = host.endsWith(".jp") ? "JPY" : (host.endsWith(".kr") ? "KRW" : ""); }
         return r;
     }
