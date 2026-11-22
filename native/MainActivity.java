@@ -1,6 +1,13 @@
 package com.archive.myclothes;
 
 import android.content.Intent;
+import android.os.Bundle;
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import java.util.concurrent.TimeUnit;
 import android.util.Log;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
@@ -10,6 +17,23 @@ import ee.forgr.capacitor.social.login.ModifiedMainActivityForSocialLoginPlugin;
 import ee.forgr.capacitor.social.login.SocialLoginPlugin;
 
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(ArchiveNotifyPlugin.class);
+        super.onCreate(savedInstanceState);
+        try {
+            UpdateWorker.ensureChannel(this);
+            WorkManager wm = WorkManager.getInstance(this);
+            wm.cancelUniqueWork("com.archive.myclothes.check"); // 예전 방식(백그라운드 러너) 정리
+            Constraints c = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+            PeriodicWorkRequest r = new PeriodicWorkRequest.Builder(UpdateWorker.class, 1, TimeUnit.HOURS)
+                .setConstraints(c).build();
+            wm.enqueueUniquePeriodicWork("archive-update-check", ExistingPeriodicWorkPolicy.KEEP, r);
+        } catch (Exception e) {
+            Log.w("Archive", "update check schedule failed", e);
+        }
+    }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {

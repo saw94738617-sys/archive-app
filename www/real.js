@@ -558,16 +558,16 @@ async function installUpdate(){const U=pendingUpd;if(!U)return;const st=$("updSt
   finally{b.disabled=false;$("updLater").disabled=false}}
 window.archiveCheckUpdate=checkUpdate;
 /* 백그라운드 확인(앱이 꺼져 있어도 새 버전 나오면 폰 알림) */
-const BRP=NATIVE?plug("BackgroundRunner"):null;const BRL="com.archive.myclothes.check";
-async function bgSetup(){if(!BRP)return;try{await BRP.dispatchEvent({label:BRL,event:"setBuild",details:{build:BUILD,dev:!!window.ARCHIVE_DEV}})}catch(e){devLog({k:"err",msg:"백그라운드 설정: "+(e.message||e)})}}
-async function notifPerm(ask){if(!BRP)return "unknown";try{const st=await BRP.checkPermissions();let v=st&&(st.notifications||st.display);if(v!=="granted"&&ask){const r=await BRP.requestPermissions({apis:["notifications"]});v=r&&(r.notifications||r.display)}return v||"unknown"}catch(e){devLog({k:"err",msg:"알림 권한: "+(e.message||e)});return "unknown"}}
+const NTP=NATIVE?plug("ArchiveNotify"):null;
+async function bgSetup(){if(!NTP)return;try{await NTP.status()}catch(e){devLog({k:"err",msg:"폰 알림 설정: "+(e.message||e)})}}
+async function notifPerm(ask,openSettings){if(!NTP)return "unknown";try{const r=ask?await NTP.ask({openSettings:!!openSettings}):await NTP.status();return (r&&r.notifications)||"unknown"}catch(e){devLog({k:"err",msg:"알림 권한: "+(e.message||e)});return "unknown"}}
 window.archiveNotifPerm=notifPerm;
 document.addEventListener("click",e=>{if(e.target.closest('#ob [data-ob="notifyOn"]'))notifPerm(true)},true);
 if(NATIVE){setTimeout(async()=>{await bgSetup();let asked=false;try{asked=localStorage.getItem("archive-notifask")==="1"}catch(e){}
   if(!asked&&onboarded){try{localStorage.setItem("archive-notifask","1")}catch(e){}notifPerm(true)}},3000)}
 function addNotifRow(){const card=$("alTest")&&$("alTest").parentElement;if(!card||$("alPush"))return;const row=document.createElement("button");row.type="button";row.className="row";row.id="alPush";
-  row.innerHTML='<span class="lb">폰 알림<small id="alPushSub">새 버전이 나오면 앱을 안 열어도 알려줘요 · 3시간마다 확인</small></span><span class="val" id="alPushVal">…</span>';card.insertBefore(row,$("alTest"));
-  const paint=async ask=>{const v=await notifPerm(ask);$("alPushVal").textContent=v==="granted"?"켜짐":NATIVE?"허용하기":"앱에서만";};row.onclick=()=>paint(true);paint(false)}
+  row.innerHTML='<span class="lb">폰 알림<small id="alPushSub">새 버전이 나오면 폰 알림바로 알려줘요 · 1시간마다 확인</small></span><span class="val" id="alPushVal">…</span>';card.insertBefore(row,$("alTest"));
+  const paint=async(ask,os)=>{const v=await notifPerm(ask,os);$("alPushVal").textContent=v==="granted"?"켜짐":NATIVE?"허용하기":"앱에서만";};row.onclick=()=>paint(true,true);paint(false)}
 const _rs3=renderSettings;renderSettings=function(){_rs3();addNotifRow()};addNotifRow();
 /* 설정 맨 아래 버전을 누르면 업데이트 확인 */
 if(ver){ver.title="눌러서 업데이트 확인";ver.addEventListener("click",()=>checkUpdate(true))}

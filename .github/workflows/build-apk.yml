@@ -31,10 +31,7 @@ jobs:
 
       - name: 패키지 설치
         run: |
-          npm view @capacitor/background-runner versions --json | tail -c 300 || true
-          npm view @capacitor/background-runner@2 peerDependencies || true
           npm install --no-audit --no-fund
-          npm ls @capacitor/background-runner @capacitor/core || true
 
       - name: 버전 정하기
         id: ver
@@ -50,12 +47,12 @@ jobs:
           npx cap add android
           npm run assets
           npx cap sync android
-          cp native/MainActivity.java android/app/src/main/java/com/archive/myclothes/MainActivity.java
+          cp native/*.java android/app/src/main/java/com/archive/myclothes/
+          mkdir -p android/app/src/main/res/drawable && cp native/res/drawable/*.xml android/app/src/main/res/drawable/
+          grep -q "androidx.work:work-runtime" android/app/build.gradle || sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' android/app/build.gradle
+          grep -n "work-runtime" android/app/build.gradle
           printf '\nsubprojects {\n    configurations.all {\n        resolutionStrategy {\n            force "androidx.browser:browser:1.8.0"\n        }\n    }\n}\n' >> android/build.gradle
           tail -8 android/build.gradle
-          G=android/app/build.gradle
-          grep -q "background-runner/android/src/main/libs" "$G" || sed -i "s#dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'#dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'\n        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'#" "$G"
-          grep -n "dirs '" "$G"
           M=android/app/src/main/AndroidManifest.xml
           grep -q REQUEST_INSTALL_PACKAGES "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n</manifest>#' "$M"
           grep -q POST_NOTIFICATIONS "$M" || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' "$M"
