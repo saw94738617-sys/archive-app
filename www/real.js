@@ -191,6 +191,7 @@ async function realFetch(){
       $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
       $("fLink").value="";
       if(nm&&NATIVE){setTimeout(()=>toOfficial(raw,nm),0)}
+      else{askOfficial()}
       return}
     const P=await readProduct(v);
     addSeller(v);const s=recSellers.find(x=>x.url===v);
@@ -1098,13 +1099,13 @@ async function guessOfficial(b){if(!b.en)return "";const slug=b.en.toLowerCase()
 function rememberOfficial(b,o){if(typeof BR==="undefined"||!o)return;const nm=b.ko||b.en;let x=brFind(BR.brands,nm)||(b.en&&brFind(BR.brands,b.en));
   if(!x){x={id:"b"+Date.now().toString(36),name:nm,sub:"",links:[],shops:[],aka:[]};BR.brands.push(x)}x.aka=x.aka||[];if(b.en&&brKey(b.en)!==brKey(x.name)&&!x.aka.some(a=>brKey(a)===brKey(b.en)))x.aka.push(b.en);
   x.links=x.links||[];if(!x.links.some(l=>originOf(l.url)===o))x.links.unshift({label:"공식몰",url:o+"/"});saveBR()}
-async function toOfficial(raw,nm){const st=$("fetchStatus");const b=splitBrand(nm);
+async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=preset||splitBrand(nm);
   if(b.ko&&!$("fBrand").value)$("fBrand").value=b.ko;
   if(b.name&&b.name!==nm&&$("fName").value===nm)$("fName").value=b.name;
   if(!b.ko&&!b.en)return;
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 찾는 중…`;
   let o=officialFromBR(b);if(!o)o=await guessOfficial(b);
-  if(!o){const u=prompt(`${b.ko||b.en} 공식몰 주소를 알면 넣어 주세요 (다음부터 기억해요 · 모르면 취소)`);if(u){o=originOf(/^https?:/.test(u)?u:"https://"+u)}}
+  if(!o){const u=prompt(`${b.ko||b.en} 공식몰 주소를 알면 넣어 주세요 (예: ourdayz.co.kr · 다음부터 기억해요 · 모르면 취소)`);if(u){o=originOf(/^https?:/.test(u)?u:"https://"+u)}}
   if(!o||noFetch(o)){st.textContent=`무신사는 링크와 이름만 넣었어요 · ${b.ko||b.en} 공식몰을 못 찾았어요 · 사진은 캡처해서 추가해 주세요`;return}
   rememberOfficial(b,o);
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 약관 확인 중…`;let t=shopStore().terms[o];if(!t){try{t=await checkTerms(o)}catch(e){}}
@@ -1116,4 +1117,15 @@ async function toOfficial(raw,nm){const st=$("fetchStatus");const b=splitBrand(n
   $("fLink").value=best.url;await realFetch();
   const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`공식몰(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요 · `+cur.replace(/^✓\s*/,"")}
 window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
+
+/* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
+function askOfficial(){const st=$("fetchStatus");
+  st.innerHTML=`무신사 링크만으로는 상품 이름을 알 수 없어요 (약관상 무신사 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
+  setTimeout(()=>{if(!$("fBrand").value)$("fBrand").focus();else if(!$("fName").value)$("fName").focus()},100)}
+document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;const br=$("fBrand").value.trim(),nm=$("fName").value.trim();
+  if(!br||!nm){toast("브랜드와 이름을 먼저 적어 주세요");(!br?$("fBrand"):$("fName")).focus();return}
+  if(!NATIVE){toast("공식몰 찾기는 폰 앱에서 돼요");return}
+  const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
+  const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
+  toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
 })();
