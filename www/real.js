@@ -901,4 +901,56 @@ function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_N
 function nameFromShare(t){t=String(t||"");const i=t.search(/https?:\/\//i);let s=(i>0?t.slice(0,i):"").replace(/^\s*\[[^\]]{1,15}\]\s*/,"").replace(/\s+/g," ").trim();return s.length>=2&&s.length<=120?s:""}
 {const _rp2=readProduct;readProduct=async function(url){url=canon(url);const _st=shopStore(),_o=originOf(url);if(_st.terms[_o]&&_st.terms[_o].result==="ban"){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
 window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
+
+/* ---------- 20) 동기화 v3: 사진은 드라이브에 따로 (목록 파일은 가볍게) ---------- */
+const PHOTO_PREFIX="p_";
+function buildSync(){let prefs={};try{prefs=JSON.parse(prefsStr())}catch(e){}
+  return JSON.stringify({app:"archive",v:3,at:new Date().toISOString(),items:ITEMS.map(packItem),dels:DELS,prefs,prefsUpd:prefsUpd(),brands:(typeof BR!=="undefined"?{brands:BR.brands,shops:BR.shops}:null)})}
+async function listPhotos(interactive){const out=new Map();let tok="";
+  for(let i=0;i<20;i++){const q=encodeURIComponent(`name contains '${PHOTO_PREFIX}'`);
+    const r=await drive(`drive/v3/files?spaces=appDataFolder&q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000${tok?"&pageToken="+encodeURIComponent(tok):""}`,{},interactive);const j=await r.json();
+    (j.files||[]).forEach(f=>{const m=/^p_(.+)\.txt$/.exec(f.name||"");if(m)out.set(m[1],f.id)});if(!j.nextPageToken)break;tok=j.nextPageToken}
+  return out}
+async function putPhotoLocal(key,data){try{const t=tx("photos","readwrite");t.objectStore("photos").put(data,key);await new Promise((ok,no)=>{t.oncomplete=ok;t.onerror=()=>no(t.error)});knownPhotos.add(key);photoKey.set(data,key)}catch(e){}}
+function refsIn(it){const r=[];PF.forEach(f=>{if(typeof it[f]==="string")r.push([f,null,it[f]])});(it.photos||[]).forEach((u,i)=>{if(typeof u==="string")r.push(["photos",i,u])});return r}
+/* 목록에 사진 번호(idb:키)로만 있는 사진을 채워 넣기: 폰에 있으면 폰에서, 없으면 드라이브에서 */
+async function resolvePhotos(remote,interactive){let got=0,miss=0;const cache=new Map();
+  for(const it of ITEMS)for(const [f,i,v] of refsIn(it)){if(!v.startsWith("idb:"))continue;const k=v.slice(4);
+    let d=cache.get(k);if(d===undefined){d=await getOne("photos",k).catch(()=>null);
+      if(!d&&remote&&remote.has(k)){try{const r=await drive(`drive/v3/files/${remote.get(k)}?alt=media`,{raw:true},interactive);d=await r.text();if(d&&d.startsWith("data:")){await putPhotoLocal(k,d);got++}else d=null}catch(e){d=null}}
+      cache.set(k,d||null)}
+    if(d){photoKey.set(d,k);if(i==null)it[f]=d;else it.photos[i]=d}else miss++}
+  return {got,miss}}
+async function uploadPhotos(remote,interactive){let up=0;const seen=new Set();
+  for(const it of ITEMS)for(const [,,v] of refsIn(it)){if(!v.startsWith("data:"))continue;let k=photoKey.get(v);if(!k){k=hashStr(v);photoKey.set(v,k)}
+    if(seen.has(k)||remote.has(k))continue;seen.add(k);
+    const r=await drive("drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},data:{name:PHOTO_PREFIX+k+".txt",parents:["appDataFolder"],mimeType:"text/plain"}},interactive);const f=await r.json();
+    if(!f||!f.id)continue;await drive(`upload/drive/v3/files/${f.id}?uploadType=media`,{method:"PATCH",headers:{"Content-Type":"text/plain"},data:v},interactive);remote.set(k,f.id);up++}
+  return up}
+syncNow=async function(interactive){if(syncing)return syncing;syncing=(async()=>{
+  let f=await findBackup(interactive);let res={added:0,changed:0,removed:0,prefs:false};let remote=null;
+  if(f&&f.modifiedTime!==G.syncMod){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},interactive);let R=null;try{R=await r.json()}catch(e){}
+    if(R){res=mergeRemote(R);
+      if(ITEMS.some(it=>refsIn(it).some(([,,v])=>v.startsWith("idb:")))){remote=await listPhotos(interactive);const pr=await resolvePhotos(remote,interactive);if(pr.got)devLog({k:"ok",host:"동기화",msg:`사진 ${pr.got}장 받음${pr.miss?" · 못 받은 사진 "+pr.miss:""}`})}
+      if(res.added||res.changed||res.removed){if(typeof renderPins==="function")renderPins();if(typeof updateCounts==="function")updateCounts();if(typeof buildTree==="function")buildTree()}}}
+  inBk=true;try{await persistAll()}finally{inBk=false}
+  if(!remote)remote=await listPhotos(interactive);
+  const up=await uploadPhotos(remote,interactive);
+  const json=buildSync();const h=hashStr(json);
+  if(h!==G.lastHash||!f||up){
+    if(!f){const r=await drive("drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},data:{name:BKNAME,parents:["appDataFolder"],mimeType:"application/json"}},interactive);f=await r.json();if(!f||!f.id)throw new Error("드라이브에 파일을 만들지 못했어요")}
+    const u=await drive(`upload/drive/v3/files/${f.id}?uploadType=media&fields=id,size,modifiedTime`,{method:"PATCH",headers:{"Content-Type":"application/json"},data:json},interactive);
+    let uj={};try{uj=await u.json()}catch(e){}G.syncMod=uj.modifiedTime||"";G.lastHash=h}
+  else G.syncMod=f.modifiedTime;
+  G.last=stamp();G.need=false;G.err="";saveG();
+  devLog({k:"ok",host:"동기화",msg:`옷 ${ITEMS.length}개 · 목록 ${Math.round(json.length/1024)}KB · 사진 올림 ${up} · 받음 +${res.added} ~${res.changed} -${res.removed}`});
+  if(res.added||res.changed||res.removed)toast(`다른 폰 기록을 합쳤어요 · ${[res.added&&`새 옷 ${res.added}`,res.changed&&`바뀐 옷 ${res.changed}`,res.removed&&`지운 옷 ${res.removed}`].filter(Boolean).join(" · ")}`);
+  if(res.prefs)toast("다른 폰에서 바꾼 설정은 앱을 다시 열면 적용돼요");
+  if(typeof renderAcct==="function"&&$("acctCard"))renderAcct();return "ok"})();
+  try{return await syncing}finally{syncing=null}};
+uploadBackup=syncNow;window.archiveSync=syncNow;
+/* 드라이브에서 불러오기도 사진 따로 받기 */
+restoreFromDrive=async function(f){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},true);const R=await r.json();if(R.app!=="archive"||!Array.isArray(R.items))throw new Error("백업 파일이 아니에요");
+  mergeRemote(R);if(ITEMS.some(it=>refsIn(it).some(([,,v])=>v.startsWith("idb:")))){const rm=await listPhotos(true);await resolvePhotos(rm,true)}
+  G.syncMod="";saveG();if(typeof renderPins==="function")renderPins();await persistAll();return {items:ITEMS}};
 })();
