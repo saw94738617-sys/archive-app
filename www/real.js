@@ -633,4 +633,27 @@ window.archiveOpenGuide=openGuide;
 $("gdAgain").onclick=()=>{if(typeof setPanel==="function")setPanel(false);setTimeout(openGuide,200)};
 const _obf=obFinish;obFinish=function(){const r=_obf.apply(this,arguments);setTimeout(openGuide,380);return r};
 if(onboarded&&!guideSeen())setTimeout(()=>{const ob=$("ob");if(!ob||ob.hidden)openGuide()},2600);
+
+/* ---------- 13) 옷 상세에서 바로 카테고리 · 세부 · 갖고 싶은 순위 고르기 ---------- */
+function dtPickers(it){const body=$("dtBody");if(!body)return;const dl=body.querySelector(".dsec .dlist");if(!dl)return;
+  const rowOf=name=>[...dl.children].find(d=>{const t=d.querySelector("dt");return t&&t.textContent===name});
+  const big=CATS.find(x=>x.id===it.c);
+  const catHTML=`<dt>카테고리</dt><div class="pk big">${CATS.map(c=>`<button type="button" data-pc="${c.id}" aria-pressed="${c.id===it.c}">${escH(c.name)}</button>`).join("")}</div>
+    ${big?`<span class="lbl">세부</span><div class="pk sub">${big.subs.map(([id,n])=>`<button type="button" data-ps="${id}" aria-pressed="${id===it.s}">${escH(n)}</button>`).join("")}<button type="button" class="subadd2" data-ps-add="1">＋ 직접 추가</button></div>`:""}`;
+  let cr=rowOf("카테고리");if(!cr){cr=document.createElement("div");dl.insertBefore(cr,dl.firstChild)}
+  cr.className="dpick";cr.innerHTML=catHTML;
+  if(it.kind==="wish"){let pr=rowOf("갖고 싶은 순위");if(!pr){pr=document.createElement("div");cr.after(pr)}const pn=prioNum(it.priority);
+    pr.className="dpick";pr.innerHTML=`<dt>갖고 싶은 순위</dt><div class="pk prio">${[1,2,3,4,5].map(n=>`<button type="button" data-pp="${n}" aria-pressed="${n===pn}">${n}</button>`).join("")}</div><small>1순위가 제일 갖고 싶은 거예요 · 위시리스트에서 1순위부터 보여요</small>`}
+}
+function dtSave(it,msg){const y=($("dtBody")||{}).scrollTop||0;persistAll();if(typeof renderPins==="function")renderPins();if(typeof buildTree==="function")buildTree();
+  openDetail(it.id);const b=$("dtBody");if(b)b.scrollTop=y;if(msg)toast(msg)}
+$("dtBody").addEventListener("click",e=>{const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
+  const c=e.target.closest("[data-pc]"),s=e.target.closest("[data-ps]"),a=e.target.closest("[data-ps-add]"),p=e.target.closest("[data-pp]");
+  if(c){if(c.dataset.pc===it.c)return;it.c=c.dataset.pc;it.s="";dtSave(it,"카테고리를 바꿨어요 · 세부도 골라 주세요");return}
+  if(s){it.s=s.dataset.ps===it.s?"":s.dataset.ps;dtSave(it,it.s?`'${catLabel(it.c,it.s)}'(으)로 정했어요`:"세부를 뺐어요");return}
+  if(a){const big=CATS.find(x=>x.id===it.c);if(!big)return;const nm=(prompt(`${big.name}에 넣을 세부 카테고리 이름`)||"").trim();if(!nm)return;
+    let sid=big.subs.find(([,n])=>n===nm);if(!sid){sid=["u"+Date.now().toString(36),nm];big.subs.push(sid);savePrefs()}it.s=sid[0];dtSave(it,`'${nm}' 추가했어요`);return}
+  if(p){const n=+p.dataset.pp;if(prioNum(it.priority)===n)return;it.priority=n;dtSave(it,`${n}순위로 바꿨어요`);return}
+});
+const _od=openDetail;openDetail=function(){const r=_od.apply(this,arguments);try{const it=ITEMS.find(x=>x.id===dtId);if(it)dtPickers(it)}catch(e){devLog&&devLog({k:"err",msg:"상세 고르기: "+(e.message||e)})}return r};
 })();
