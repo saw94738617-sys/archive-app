@@ -71,6 +71,44 @@ public class ArchiveNotifyPlugin extends Plugin {
     @PluginMethod
     public void checkNow(PluginCall call) { checkSoon(); call.resolve(); }
 
+    /** 알림 켠 위시 옷 목록을 받아 두기 (백그라운드 재입고 · 가격 확인용) */
+    @PluginMethod
+    public void setWatch(PluginCall call) {
+        String json = call.getString("json", "[]");
+        SharedPreferences sp = getContext().getSharedPreferences(AlertWorker.PREF, Context.MODE_PRIVATE);
+        try {
+            org.json.JSONArray incoming = new org.json.JSONArray(json);
+            sp.edit().putString("items", incoming.toString()).apply();
+        } catch (Exception e) { call.reject("bad json"); return; }
+        int hours = Math.max(4, Math.min(24, call.getInt("hours", 8)));
+        if (sp.getInt("hours", 0) != hours) {
+            sp.edit().putInt("hours", hours).apply();
+            androidx.work.Constraints c = new androidx.work.Constraints.Builder().setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build();
+            androidx.work.PeriodicWorkRequest a = new androidx.work.PeriodicWorkRequest.Builder(AlertWorker.class, hours, java.util.concurrent.TimeUnit.HOURS).setConstraints(c).build();
+            WorkManager.getInstance(getContext()).enqueueUniquePeriodicWork("archive-alert-check", androidx.work.ExistingPeriodicWorkPolicy.UPDATE, a);
+        }
+        call.resolve();
+    }
+
+    /** 백그라운드에서 확인한 결과(재고 · 가격)와 알림에서 누른 옷을 앱으로 가져오기 */
+    @PluginMethod
+    public void pullAlerts(PluginCall call) {
+        SharedPreferences sp = getContext().getSharedPreferences(AlertWorker.PREF, Context.MODE_PRIVATE);
+        JSObject r = new JSObject();
+        r.put("updates", sp.getString("updates", "[]"));
+        r.put("open", sp.getString("open", ""));
+        r.put("lastAt", sp.getLong("lastAt", 0));
+        r.put("lastMsg", sp.getString("lastMsg", ""));
+        sp.edit().putString("updates", "[]").remove("open").apply();
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void alertsNow(PluginCall call) {
+        WorkManager.getInstance(getContext()).enqueue(new OneTimeWorkRequest.Builder(AlertWorker.class).build());
+        call.resolve();
+    }
+
     @PluginMethod
     public void test(PluginCall call) {
         JSObject r = new JSObject();

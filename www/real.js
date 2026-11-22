@@ -953,4 +953,25 @@ uploadBackup=syncNow;window.archiveSync=syncNow;
 restoreFromDrive=async function(f){const r=await drive(`drive/v3/files/${f.id}?alt=media`,{},true);const R=await r.json();if(R.app!=="archive"||!Array.isArray(R.items))throw new Error("백업 파일이 아니에요");
   mergeRemote(R);if(ITEMS.some(it=>refsIn(it).some(([,,v])=>v.startsWith("idb:")))){const rm=await listPhotos(true);await resolvePhotos(rm,true)}
   G.syncMod="";saveG();if(typeof renderPins==="function")renderPins();await persistAll();return {items:ITEMS}};
+
+/* ---------- 21) 재입고 · 가격 알림 백그라운드 (앱이 꺼져 있어도 6시간마다) ---------- */
+function watchList(){const st=shopStore();return ITEMS.filter(x=>x.kind==="wish"&&x.alert&&(x.alert.restock||x.alert.price)).map(it=>{
+    const my=(typeof myCols==="function"?myCols(it).names[0]:"")||"";
+    const sellers=(it.sellers||[]).filter(s=>{if(!/^https?:/.test(s.url||"")||noFetch(s.url))return false;const t=st.terms[originOf(s.url)];return !(t&&t.result==="ban")})
+      .map(s=>({url:s.url,shop:s.shop||"",price:s.price||"",stock:s.stock||null}));
+    return {id:it.id,title:(it.brand?it.brand+" ":"")+it.name,my,restock:!!it.alert.restock,price:!!it.alert.price,target:+(it.alert.target||0),sellers}}).filter(w=>w.sellers.length)}
+let lastWatch="";
+async function pushWatch(){if(!NTP||!NTP.setWatch)return;try{const j=JSON.stringify(watchList());if(j===lastWatch)return;lastWatch=j;const fr=(typeof alertCfg!=="undefined"&&+alertCfg.freq)||3;await NTP.setWatch({json:j,hours:Math.round(24/fr)})}catch(e){devLog({k:"err",msg:"알림 목록 넘기기: "+(e.message||e)})}}
+async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP.pullAlerts()}catch(e){return}
+  let ups=[];try{ups=JSON.parse(r.updates||"[]")}catch(e){}let changed=false;
+  for(const u of ups){const it=ITEMS.find(x=>x.id===u.id);if(!it)continue;const s=(it.sellers||[]).find(x=>x.url===u.url);if(!s)continue;
+    if(u.stock){s.stock=u.stock;changed=true}if(u.price){s.price=u.price;changed=true}s.checked=stamp()}
+  if(changed){persistAll();if(typeof renderPins==="function")renderPins()}
+  if(r.open){const it=ITEMS.find(x=>x.id===r.open);if(it)setTimeout(()=>openDetail(it.id),300)}
+  if(r.lastAt){try{localStorage.setItem("archive-bgalert",JSON.stringify({at:r.lastAt,msg:r.lastMsg||""}))}catch(e){}}}
+{const _pa4=persistAll;persistAll=async function(){const r=await _pa4.apply(this,arguments);pushWatch();return r}}
+if(NATIVE){const go=()=>{if(!window.__archLoaded){setTimeout(go,500);return}pullWatch().then(pushWatch)};setTimeout(go,800);
+  if(AppP)AppP.addListener("resume",()=>setTimeout(()=>pullWatch(),300))}
+document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setTimeout(()=>{lastWatch="";pushWatch()},100)});
+window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&NTP.alertsNow&&NTP.alertsNow()};
 })();

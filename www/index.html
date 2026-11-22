@@ -1007,7 +1007,7 @@ svg{display:block}
       </div></div>
 
       <div class="sg"><h3>알림</h3><div class="card2">
-        <div class="row rowcol"><span class="lb">재고 · 가격 확인 주기<small>위시에서 알림 켠 옷만 판매처를 확인해요</small></span><div class="seg" id="alFreq"><button type="button" data-f="1" aria-pressed="false">하루 1번</button><button type="button" data-f="3" aria-pressed="true">하루 3번</button><button type="button" data-f="6" aria-pressed="false">하루 6번</button></div></div>
+        <div class="row rowcol"><span class="lb">재고 · 가격 확인 주기<small>알림 켠 위시 옷만 · 앱이 꺼져 있어도 확인해요</small></span><div class="seg" id="alFreq"><button type="button" data-f="1" aria-pressed="false">하루 1번</button><button type="button" data-f="3" aria-pressed="true">하루 3번</button><button type="button" data-f="6" aria-pressed="false">하루 6번</button></div></div>
         <div class="row"><span class="lb">조용한 시간<small>밤 11시 ~ 아침 8시에는 모았다가 아침에 알려줘요</small></span><button class="sw" type="button" role="switch" aria-checked="true" id="alQuiet" aria-label="조용한 시간"></button></div>
         <button class="row" type="button" id="alList"><span class="lb">알림 켠 옷</span><span class="val" id="alCount">0개</span></button>
         <button class="row" type="button" id="alTest"><span class="lb">테스트 알림 보내기<small>폰에 어떻게 뜨는지 미리 보기</small></span><span class="val"></span></button>
@@ -2063,7 +2063,7 @@ function alertHTML(it){if(it.kind!=="wish")return"";const a=it.alert||{};const m
     <div class="row"><span class="lb">${my.length?escH(my[0])+" ":"내 사이즈 "}재입고 알림<small>${rs}</small></span><button class="sw" type="button" role="switch" data-al="restock" aria-checked="${!!(a.restock&&can)}" ${can?"":"disabled"} aria-label="재입고 알림"></button></div>
     <div class="row"><span class="lb">가격 내려가면 알림<small>${pn?`지금 ${escH(it.price)}${a.target?` · 목표 ₩${(+a.target).toLocaleString("ko-KR")} 이하가 되면 알려줘요`:" · 조금이라도 내려가면 알려줘요"}`:"가격 정보가 없어요"}</small></span><button class="sw" type="button" role="switch" data-al="price" aria-checked="${!!a.price}" aria-label="가격 알림"></button></div>
     ${a.price?`<button type="button" class="row" data-target><span class="lb">목표 가격<small>비워두면 조금만 내려가도 알려줘요</small></span><span class="val">${a.target?"₩"+(+a.target).toLocaleString("ko-KR"):"없음"}</span></button>`:""}
-  </div><p class="mylegend">앱에서 ${({1:"하루 1번",3:"하루 3번",6:"하루 6번"})[alertCfg.freq]} 판매처를 확인해요 · 주기는 설정 › 알림에서 바꿔요</p></div>`}
+  </div><p class="mylegend">앱이 꺼져 있어도 ${({1:"하루 1번",3:"하루 3번",6:"하루 6번"})[alertCfg.freq]} 판매처를 확인해서 폰 알림으로 알려줘요 · 주기는 설정 › 알림에서 바꿔요</p></div>`}
 
 /* 관리·수선 */
 const CARE_T=["수선","세탁","관리","수리 · 리솔","기타"];

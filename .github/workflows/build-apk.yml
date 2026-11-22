@@ -11,9 +11,10 @@ permissions:
 
 jobs:
   build:
-    # 코드를 올리는 것만으로는 배포하지 않아요. 커밋 메시지에 [배포]가 있거나 직접 실행할 때만 새 버전을 만들어요.
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[배포]')
+    # 코드를 올리면 '빌드가 되는지'만 확인해요. 서명 · 릴리스 · 폰 알림은 커밋 메시지에 [배포]가 있거나 직접 실행할 때만.
     runs-on: ubuntu-latest
+    env:
+      DEPLOY: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[배포]') }}
     steps:
       - uses: actions/checkout@v5
 
@@ -80,6 +81,7 @@ jobs:
         run: cd android && ./gradlew --no-daemon assembleRelease
 
       - name: 서명 준비
+        if: env.DEPLOY == 'true'
         env:
           KEYSTORE_B64: ${{ secrets.ARCHIVE_KEYSTORE_B64 }}
         run: |
@@ -87,6 +89,7 @@ jobs:
           echo "BT=$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)" >> "$GITHUB_ENV"
 
       - name: 일반 버전 서명
+        if: env.DEPLOY == 'true'
         env:
           KEYSTORE_PASS: ${{ secrets.ARCHIVE_KEYSTORE_PASS }}
         run: |
@@ -95,6 +98,7 @@ jobs:
           rm -f aligned.apk
 
       - name: 개발자 버전 빌드
+        if: env.DEPLOY == 'true'
         run: |
           cp assets-dev/*.png assets/
           npm run assets
@@ -107,6 +111,7 @@ jobs:
           cd android && ./gradlew --no-daemon assembleRelease
 
       - name: 개발자 버전 서명
+        if: env.DEPLOY == 'true'
         env:
           KEYSTORE_PASS: ${{ secrets.ARCHIVE_KEYSTORE_PASS }}
         run: |
@@ -117,12 +122,14 @@ jobs:
           rm -f aligned.apk "$RUNNER_TEMP/release.jks"
 
       - name: 업데이트 내용 정리
+        if: env.DEPLOY == 'true'
         run: |
           git log -1 --pretty=%B | grep -v -E "Co-Authored-By|Claude-Session|^\s*$" > notes.md || true
           printf '\n폰에서 이 페이지를 열고 APK를 눌러 설치하세요. 덮어 설치하면 기록은 그대로 남아요.\n- archive-dev-*.apk : 내 폰용 (개발자 메뉴 있음)\n- archive-*.apk : 일반 버전\n' >> notes.md
           cat notes.md
 
       - name: 릴리스에 APK 올리기
+        if: env.DEPLOY == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.name }}
@@ -133,6 +140,7 @@ jobs:
             archive-${{ steps.ver.outputs.name }}.apk
 
       - name: Google 인증 (비밀키 없이 GitHub 신원으로)
+        if: env.DEPLOY == 'true'
         id: gauth
         continue-on-error: true
         uses: google-github-actions/auth@v2
@@ -143,7 +151,7 @@ jobs:
           access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
 
       - name: 폰으로 새 버전 푸시 보내기
-        if: steps.gauth.outcome == 'success'
+        if: env.DEPLOY == 'true' && steps.gauth.outcome == 'success'
         continue-on-error: true
         env:
           TOKEN: ${{ steps.gauth.outputs.access_token }}

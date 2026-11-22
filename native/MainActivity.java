@@ -23,6 +23,8 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         registerPlugin(ArchiveNotifyPlugin.class);
         registerPlugin(ArchiveBioPlugin.class);
         super.onCreate(savedInstanceState);
+        rememberOpen(getIntent());
+        addOnNewIntentListener(this::rememberOpen);
         try {
             UpdateWorker.ensureChannel(this);
             WorkManager wm = WorkManager.getInstance(this);
@@ -31,6 +33,9 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
             PeriodicWorkRequest r = new PeriodicWorkRequest.Builder(UpdateWorker.class, 1, TimeUnit.HOURS)
                 .setConstraints(c).build();
             wm.enqueueUniquePeriodicWork("archive-update-check", ExistingPeriodicWorkPolicy.KEEP, r);
+            // 재입고 · 가격 알림: 6시간마다 (알림 켠 옷이 없으면 바로 끝나요)
+            PeriodicWorkRequest a = new PeriodicWorkRequest.Builder(AlertWorker.class, 6, TimeUnit.HOURS).setConstraints(c).build();
+            wm.enqueueUniquePeriodicWork("archive-alert-check", ExistingPeriodicWorkPolicy.KEEP, a);
         } catch (Exception e) {
             Log.w("Archive", "update check schedule failed", e);
         }
@@ -62,4 +67,12 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
 
     // 플러그인이 MainActivity 수정 여부를 확인하는 용도. 비워둬야 해요.
     public void IHaveModifiedTheMainActivityForTheUseWithSocialLoginPlugin() {}
+
+    /** 재입고 알림을 눌러서 열면, 앱이 그 옷을 바로 보여줄 수 있게 기억해요 */
+    private void rememberOpen(Intent intent) {
+        if (intent == null) return;
+        String id = intent.getStringExtra("openItem");
+        if (id != null && !id.isEmpty())
+            getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putString("open", id).apply();
+    }
 }
