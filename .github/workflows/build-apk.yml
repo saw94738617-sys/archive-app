@@ -55,7 +55,7 @@ jobs:
           mkdir -p android/app/src/main/res/drawable && cp native/res/drawable/*.xml android/app/src/main/res/drawable/
           grep -q "androidx.work:work-runtime" android/app/build.gradle || sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.work:work-runtime:2.9.1"/' android/app/build.gradle
           grep -n "work-runtime" android/app/build.gradle
-          sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.biometric:biometric:1.1.0"/' android/app/build.gradle
+          sed -i '0,/^dependencies {/s//dependencies {\n    implementation "androidx.biometric:biometric:1.1.0"\n    implementation "com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1"/' android/app/build.gradle
           # 푸시 알림(Firebase)
           sed -i '0,/^dependencies {/s//dependencies {\n    implementation platform("com.google.firebase:firebase-bom:33.7.0")\n    implementation "com.google.firebase:firebase-messaging"/' android/app/build.gradle
           if [ -f native/google-services.json ]; then cp native/google-services.json android/app/google-services.json; echo "google-services.json 넣음"; fi
@@ -70,6 +70,7 @@ jobs:
           grep -n "uses-permission" "$M"
           grep -q UpdatePushService "$M" || sed -i 's#</application>#    <service android:name=".UpdatePushService" android:exported="false"><intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter></service>\n    </application>#' "$M"
           grep -n "UpdatePushService" "$M"
+          grep -q "mlkit.vision.DEPENDENCIES" "$M" || sed -i 's#</application>#    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr_korean" />\n    </application>#' "$M"
 
       - name: 버전 번호 넣기 (덮어 설치되게)
         run: |

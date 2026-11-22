@@ -974,4 +974,33 @@ if(NATIVE){const go=()=>{if(!window.__archLoaded){setTimeout(go,500);return}pull
   if(AppP)AppP.addListener("resume",()=>setTimeout(()=>pullWatch(),300))}
 document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setTimeout(()=>{lastWatch="";pushWatch()},100)});
 window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&NTP.alertsNow&&NTP.alertsNow()};
+
+/* ---------- 22) 사이즈표 사진 글자 읽기 (폰 안에서) ---------- */
+const OCR=NATIVE?plug("ArchiveOcr"):null;
+function wordsToRows(words){const W=(words||[]).map(w=>({t:clean(w.t),x:+w.x,y:+w.y,w:+w.w,h:+w.h})).filter(w=>w.t);if(!W.length)return [];
+  const hs=W.map(w=>w.h).sort((a,b)=>a-b),mh=hs[Math.floor(hs.length/2)]||10;
+  W.forEach(w=>w.cy=w.y+w.h/2);W.sort((a,b)=>a.cy-b.cy);
+  const rows=[];for(const w of W){const r=rows[rows.length-1];if(r&&Math.abs(w.cy-r.cy)<mh*0.6){r.ws.push(w);r.cy=(r.cy*(r.ws.length-1)+w.cy)/r.ws.length}else rows.push({cy:w.cy,ws:[w]})}
+  return rows.map(r=>{r.ws.sort((a,b)=>a.x-b.x);const cells=[];let cur=null;
+    for(const w of r.ws){const isNum=/^[\d.,]+$/.test(w.t);if(cur&&!isNum&&!cur.num&&w.x-(cur.x+cur.w)<mh*0.9){cur.t+=" "+w.t;cur.w=w.x+w.w-cur.x}else{cur={t:w.t,x:w.x,w:w.w,num:isNum};cells.push(cur)}}
+    return cells.map(c=>c.t.replace(/^[|:·]+|[|:·]+$/g,"").trim()).filter(Boolean)})}
+function chartFromRows(rows){if(rows.length<2)return null;const esc=t=>String(t).replace(/[&<>]/g,"");
+  const html="<table>"+rows.map(r=>"<tr>"+r.map(c=>"<td>"+esc(c)+"</td>").join("")+"</tr>").join("")+"</table>";
+  try{return findChart(new DOMParser().parseFromString(html,"text/html"))}catch(e){return null}}
+async function ocrChart(dataUrl){if(!OCR){toast("사진 글자 읽기는 폰 앱에서 돼요");return}
+  const st=$("ocrSt");if(st){st.hidden=false;st.innerHTML='<span class="spin"></span>사진에서 글자 읽는 중…'}
+  try{const r=await OCR.read({data:dataUrl});const rows=wordsToRows(r.words);const c=chartFromRows(rows);
+    if(c&&c.rows.length){recChart=c;renderChart();const ex=$("sztEx");if(ex)ex.hidden=true;if(st)st.textContent=`✓ 사진에서 표를 읽었어요 · 사이즈 ${c.cols.length}개 · 항목 ${c.rows.length}개 · 틀린 칸은 눌러서 고쳐 주세요`;devLog({k:"ok",host:"사진 글자 읽기",msg:`${c.cols.join("/")} · ${c.rows.map(x=>x[0]).join("/")}`})}
+    else{if(st)st.textContent="사진에서 사이즈표 모양을 찾지 못했어요 · 표 부분만 잘라서 다시 해 보거나 직접 적어 주세요";devLog({k:"fail",host:"사진 글자 읽기",msg:(r.text||"").slice(0,120)})}}
+  catch(e){if(st)st.textContent="글자를 읽지 못했어요 · "+(e.message||e)}}
+function ocrBtn(){const acts=document.querySelector(".szt-acts");if(!acts||$("ocrBtn"))return;
+  const b=document.createElement("button");b.type="button";b.id="ocrBtn";b.textContent="📷 사진 글자로 표 채우기";acts.appendChild(b);
+  const s=document.createElement("p");s.id="ocrSt";s.className="note";s.hidden=true;s.style.margin="8px 0 0";acts.after(s);
+  b.onclick=()=>{if(recChartImg){ocrChart(recChartImg);return}const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
+    inp.onchange=async()=>{const f0=inp.files&&inp.files[0];if(!f0)return;let f=f0;try{if(typeof shrink==="function")f=await shrink(f0,2000)}catch(e){}
+      const fr=new FileReader();fr.onload=()=>{recChartImg=fr.result;renderChart();ocrChart(recChartImg)};fr.readAsDataURL(f)};inp.click()}}
+ocrBtn();
+/* 사이즈표 사진을 저장하면, 표가 비어 있을 때 바로 읽어서 채워요 */
+$("sztImg").addEventListener("change",()=>setTimeout(()=>{if(recChartImg&&(!recChart||!recChart.rows.some(r=>r.slice(1).some(Boolean))))ocrChart(recChartImg)},700));
+window.archiveOcr={wordsToRows,chartFromRows};
 })();
