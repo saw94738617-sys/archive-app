@@ -1291,7 +1291,7 @@ $("fetchBtn").onclick=()=>{
     $("fLink").value="";
   },1100);
 };
-$("addLinkBtn").onclick=()=>{const v=$("addLink").value.trim();if(!okUrl(v)){$("addLink").focus();return}addSeller(v);$("addLink").value=""};
+$("addLinkBtn").onclick=()=>{const v=(window.__pickUrl||(x=>x.trim()))($("addLink").value);if(!okUrl(v)){$("addLink").focus();return}addSeller(v);$("addLink").value=""};
 $("sellers").addEventListener("click",e=>{
   const st=e.target.closest(".star");if(st){const i=+st.dataset.i;recSellers.forEach((s,j)=>s.star=j===i);$("fShop").value=recSellers[i].shop;renderSellers();return}
   const rm=e.target.closest("[data-rm]");if(rm){recSellers.splice(+rm.dataset.rm,1);renderSellers()}

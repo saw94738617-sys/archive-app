@@ -77,9 +77,11 @@ window.addEventListener("pagehide",()=>persistAll());
 
 /* ---------- 2) 링크 읽기 (앱에서만) ---------- */
 const UA="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
+const UA_PC="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
+const uaFor=u=>/musinsa\.com|onelink\.me|page\.link|app\.link/i.test(u)?UA_PC:UA;
 async function getText(url){
   if(window.__testPages&&url in window.__testPages){const v=window.__testPages[url];if(v===null)throw new Error("404");return v}
-  if(Http){const r=await Http.get({url,headers:{"User-Agent":UA,"Accept":"text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8","Accept-Language":"ko-KR,ko;q=0.9,ja;q=0.7,en;q=0.6"},responseType:"text",connectTimeout:15000,readTimeout:20000});
+  if(Http){const r=await Http.get({url,headers:{"User-Agent":uaFor(url),"Accept":"text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8","Accept-Language":"ko-KR,ko;q=0.9,ja;q=0.7,en;q=0.6"},responseType:"text",connectTimeout:15000,readTimeout:20000});
     if(r.status>=400)throw new Error("HTTP "+r.status);return typeof r.data==="string"?r.data:JSON.stringify(r.data)}
   const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);return await r.text()}
 async function getImageBlob(url){
@@ -170,10 +172,11 @@ function stamp(){const d=new Date();return `${d.getMonth()+1}/${d.getDate()} ${S
 
 /* 기록 화면: 가져오기 */
 async function realFetch(){
-  const v=$("fLink").value.trim();
+  let v=pickUrl($("fLink").value);
   if(!okUrl(v)){$("fetchStatus").textContent="https:// 로 시작하는 쇼핑몰 링크를 붙여넣어 주세요.";return}
   $("fetchStatus").innerHTML='<span class="spin"></span>상품 페이지 읽는 중…';$("fetchBtn").disabled=true;
   try{
+    try{v=await resolveLink(v)}catch(e){}
     const P=await readProduct(v);
     addSeller(v);const s=recSellers.find(x=>x.url===v);
     if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stock){s.stock=P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
@@ -190,7 +193,7 @@ async function realFetch(){
     if(P.stock)fill.push("재고");
     $("fetchStatus").textContent=fill.length?"✓ "+fill.join(" · ")+" 가져왔어요":"페이지에서 읽을 수 있는 정보가 없었어요 · 직접 적어주세요";
     $("fLink").value="";
-  }catch(e){console.warn(e);addSeller(v);$("fetchStatus").textContent="이 쇼핑몰은 페이지를 읽지 못했어요 · 판매처만 추가했어요";const nm=nameFromUrl(v);if(nm&&!$("fName").value)$("fName").value=nm}
+  }catch(e){console.warn(e);addSeller(v);$("fetchStatus").textContent="이 쇼핑몰은 페이지를 읽지 못했어요 · 판매처만 추가했어요"+(e&&e.message?" ("+String(e.message).slice(0,40)+")":"");const nm=nameFromUrl(v);if(nm&&!$("fName").value)$("fName").value=nm}
   finally{$("fetchBtn").disabled=false}
 }
 
@@ -822,4 +825,31 @@ if(NATIVE&&AppP)AppP.addListener("resume",()=>setTimeout(syncSoon,800));
   const nw=$("gNow");if(nw)nw.querySelector(".lb").innerHTML=`지금 동기화<small>옷 ${ITEMS.length}개 · 마지막 ${escH(G.last||"아직 없음")}</small>`;
   const st=c.querySelector(".acctme small");if(st&&!G.need)st.textContent=`● 동기화 켜짐 · 마지막 ${G.last||"아직 없음"}`;
   const n=$("acctNote");if(n)n.textContent="기록은 내 Google 드라이브의 앱 전용 공간에서 동기화돼요. 안드로이드 · 아이폰 어디서든 같은 Google 계정으로 로그인하면 옷마다 가장 최근에 고친 내용으로 합쳐져요."}}catch(e){}return r}}
+
+/* ---------- 19) 공유 문구 · 짧은 링크 · 무신사 ---------- */
+function pickUrl(t){t=String(t||"").trim();const m=t.match(/https?:\/\/[^\s<>"'`)\]]+/i);if(m)return m[0].replace(/[.,!?。]+$/,"");if(/^(www\.|m\.)?[a-z0-9-]+(\.[a-z0-9-]+)+\/\S*/i.test(t))return "https://"+t;return t}
+const SHORT=/(^|\.)(onelink\.me|page\.link|app\.link|naver\.me|bit\.ly|han\.gl|me2\.kr|url\.kr|vo\.la|t\.co|lnk\.to|abr\.ge|link\.musinsa\.com|musinsa\.link|kko\.to)$/i;
+function musinsaId(u){const m=String(u).match(/musinsa\.com\/(?:[a-z]{2}\/)?(?:products|app\/goods|goods)\/(\d+)/i);return m?m[1]:""}
+function canon(u){const id=musinsaId(u);if(id)return "https://www.musinsa.com/products/"+id;return u}
+async function resolveLink(u){u=canon(u);let host="";try{host=new URL(u).hostname}catch(e){return u}
+  if(!SHORT.test(host))return u;
+  let finalUrl="",body="";
+  try{if(window.__testPages&&u in window.__testPages){body=window.__testPages[u]||""}
+    else if(Http){const r=await Http.get({url:u,headers:{"User-Agent":UA_PC},responseType:"text",connectTimeout:15000,readTimeout:20000});finalUrl=r.url||"";body=typeof r.data==="string"?r.data:""}
+    else{const r=await fetch(u);finalUrl=r.url;body=await r.text()}}catch(e){devLog({k:"fail",host,url:u,msg:"짧은 링크 풀기: "+(e.message||e)})}
+  const hay=[finalUrl,body,(()=>{try{return decodeURIComponent(body)}catch(e){return ""}})()].join(" ");
+  const id=musinsaId(hay);if(id)return "https://www.musinsa.com/products/"+id;
+  const dp=hay.match(/af_web_dp=([^&"'\s]+)/);if(dp){try{return canon(decodeURIComponent(dp[1]))}catch(e){}}
+  if(finalUrl&&/^https?:/.test(finalUrl)&&!SHORT.test(new URL(finalUrl).hostname))return canon(finalUrl);
+  const og=body.match(/property=["']og:url["'][^>]*content=["']([^"']+)/i);if(og)return canon(og[1]);
+  return u}
+async function musinsaChart(id){try{const t=await getText(`https://goods-detail.musinsa.com/api2/goods/${id}/actual-size`);const j=JSON.parse(t);const S=(j&&j.data&&j.data.sizes)||[];if(!S.length)return null;
+  const labels=[];S.forEach(s=>(s.items||[]).forEach(i=>{if(!labels.includes(i.name))labels.push(i.name)}));
+  const fmt=v=>v==null||v===""?"":String(+v%1?(+v).toFixed(1):+v);
+  return {cols:S.map(s=>String(s.name).toUpperCase()),rows:labels.map(l=>[l,...S.map(s=>{const it=(s.items||[]).find(i=>i.name===l);return it?fmt(it.value):""})])}}catch(e){devLog({k:"fail",host:"musinsa.com",msg:"실측표: "+(e.message||e)});return null}}
+{const _rp2=readProduct;readProduct=async function(url){url=canon(url);const P=await _rp2(url);const id=musinsaId(url);
+  if(id){P.shop="무신사";if(!P.chart){const c=await musinsaChart(id);if(c){P.chart=c;P.src.push("무신사 실측")}}
+    P.name=P.name.replace(/\s*-\s*사이즈\s*&\s*후기\s*\|\s*무신사$/,"").trim()}
+  return P};window.archiveReadProduct=readProduct}
+window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
 })();
