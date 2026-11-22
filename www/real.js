@@ -642,6 +642,8 @@ function dtPickers(it){const body=$("dtBody");if(!body)return;const dl=body.quer
     ${big?`<span class="lbl">세부</span><div class="pk sub">${big.subs.map(([id,n])=>`<button type="button" data-ps="${id}" aria-pressed="${id===it.s}">${escH(n)}</button>`).join("")}<button type="button" class="subadd2" data-ps-add="1">＋ 직접 추가</button></div>`:""}`;
   let cr=rowOf("카테고리");if(!cr){cr=document.createElement("div");dl.insertBefore(cr,dl.firstChild)}
   cr.className="dpick";cr.innerHTML=catHTML;
+  let kr=dl.querySelector(".dpick.kind");if(!kr){kr=document.createElement("div");dl.insertBefore(kr,cr)}
+  kr.className="dpick kind";kr.innerHTML=`<dt>어디에 둘까요</dt><div class="pk big">${[["archive","아카이브 · 산 옷"],["wish","위시 · 갖고 싶은 옷"]].map(([k,n])=>`<button type="button" data-pk="${k}" aria-pressed="${(it.kind||"archive")===k}">${n}</button>`).join("")}</div>`;
   if(it.kind==="wish"){let pr=rowOf("갖고 싶은 순위");if(!pr){pr=document.createElement("div");cr.after(pr)}const pn=prioNum(it.priority);
     pr.className="dpick";pr.innerHTML=`<dt>갖고 싶은 순위</dt><div class="pk prio">${[1,2,3,4,5].map(n=>`<button type="button" data-pp="${n}" aria-pressed="${n===pn}">${n}</button>`).join("")}</div><small>1순위가 제일 갖고 싶은 거예요 · 위시리스트에서 1순위부터 보여요</small>`}
 }
@@ -653,6 +655,8 @@ $("dtBody").addEventListener("click",e=>{const it=ITEMS.find(x=>x.id===dtId);if(
   if(s){it.s=s.dataset.ps===it.s?"":s.dataset.ps;dtSave(it,it.s?`'${catLabel(it.c,it.s)}'(으)로 정했어요`:"세부를 뺐어요");return}
   if(a){const big=CATS.find(x=>x.id===it.c);if(!big)return;const nm=(prompt(`${big.name}에 넣을 세부 카테고리 이름`)||"").trim();if(!nm)return;
     let sid=big.subs.find(([,n])=>n===nm);if(!sid){sid=["u"+Date.now().toString(36),nm];big.subs.push(sid);savePrefs()}it.s=sid[0];dtSave(it,`'${nm}' 추가했어요`);return}
+  const k=e.target.closest("[data-pk]");
+  if(k){const nk=k.dataset.pk;if((it.kind||"archive")===nk)return;it.kind=nk;if(nk==="wish"&&!it.priority)it.priority=3;dtSave(it,nk==="wish"?"위시로 옮겼어요 · 순위를 골라 주세요":"아카이브로 옮겼어요");return}
   if(p){const n=+p.dataset.pp;if(prioNum(it.priority)===n)return;it.priority=n;dtSave(it,`${n}순위로 바꿨어요`);return}
 });
 const _od=openDetail;openDetail=function(){const r=_od.apply(this,arguments);try{const it=ITEMS.find(x=>x.id===dtId);if(it)dtPickers(it)}catch(e){devLog&&devLog({k:"err",msg:"상세 고르기: "+(e.message||e)})}return r};
