@@ -23,6 +23,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         registerPlugin(ArchiveNotifyPlugin.class);
         registerPlugin(ArchiveBioPlugin.class);
         registerPlugin(ArchiveOcrPlugin.class);
+        registerPlugin(ArchiveGAuthPlugin.class);
         super.onCreate(savedInstanceState);
         rememberOpen(getIntent());
         addOnNewIntentListener(this::rememberOpen);

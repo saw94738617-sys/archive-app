@@ -153,6 +153,8 @@ async function readProduct(url){
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
+  if(!P.brand){try{P.brand=guessBrand(doc,html,P,ld)}catch(e){}}
+  if(P.brand){const bl=P.brand.toLowerCase();P.name=P.name.replace(new RegExp("^\\s*\\[\\s*"+P.brand.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\s*\\]\\s*","i"),"");if(P.name.toLowerCase().startsWith(bl+" "))P.name=P.name.slice(P.brand.length+1)}
   if(P.brand&&P.name.toLowerCase().startsWith(P.brand.toLowerCase()+" "))P.name=P.name.slice(P.brand.length+1);
   P.name=P.name.replace(/\s*[|·\-–]\s*[^|·\-–]{2,30}$/,m=>P.shop&&m.includes(P.shop)?"":m).trim();
   if(!P.currency){const host=new URL(url).hostname;P.currency=/\.jp$/.test(host)?"JPY":/\.kr$|\.co\.kr$/.test(host)?"KRW":""}
@@ -187,7 +189,9 @@ async function realFetch(){
     if(noFetch(v)){addSeller(v);const s0=recSellers.find(x=>x.url===v);if(s0){s0.shop=noFetchShop(v)||s0.shop;renderSellers()}
       const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
       $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
-      $("fLink").value="";return}
+      $("fLink").value="";
+      if(nm&&NATIVE){setTimeout(()=>toOfficial(raw,nm),0)}
+      return}
     const P=await readProduct(v);
     addSeller(v);const s=recSellers.find(x=>x.url===v);
     if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stock){s.stock=P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
@@ -382,6 +386,8 @@ async function gLogin(){await slInit();const res=await SL.login({provider:"googl
 async function gToken(interactive){
   if(G.on&&G.token&&Date.now()-(G.at||0)<50*60*1000)return G.token;
   if(!G.on)throw new Error("로그인 필요");
+  /* 화면 없이 새 출입증 받기 (이미 허락한 계정이면 창이 안 떠요) */
+  try{const GA=NATIVE?plug("ArchiveGAuth"):null;if(GA){const r=await GA.silent();if(r&&r.token){G.token=r.token;G.at=Date.now();G.need=false;saveG();return G.token}}}catch(e){}
   try{await slInit();if(SL.refresh){const r=await SL.refresh({provider:"google",options:{scopes:SCOPES}});if(r){try{takeLogin(r);return G.token}catch(e){}}}}catch(e){}
   if(!interactive){G.need=true;saveG();throw new Error("다시 연결 필요")}
   await slInit();const res=await SL.login({provider:"google",options:{scopes:SCOPES,filterByAuthorizedAccounts:true,autoSelectEnabled:true}});takeLogin(res);return G.token}
@@ -1003,4 +1009,111 @@ ocrBtn();
 /* 사이즈표 사진을 저장하면, 표가 비어 있을 때 바로 읽어서 채워요 */
 $("sztImg").addEventListener("change",()=>setTimeout(()=>{if(recChartImg&&(!recChart||!recChart.rows.some(r=>r.slice(1).some(Boolean))))ocrChart(recChartImg)},700));
 window.archiveOcr={wordsToRows,chartFromRows};
+
+/* ---------- 23) 사진 원본 화질로 저장 ---------- */
+const hqOn=()=>{try{return localStorage.getItem("archive-hq")==="1"}catch(e){return false}};
+{const _sh=shrink;shrink=async function(file,max){if(hqOn())return file;return _sh.apply(this,arguments)}}
+function paintHQ(){const s=$("swHQ");if(!s)return;s.setAttribute("aria-checked",hqOn());$("hqSub").textContent=hqOn()?"새로 넣는 사진은 줄이지 않고 원래 화질로 저장해요 · 용량을 더 써요":"끄면 줄여서 저장해요 (용량 절약)"}
+$("swHQ").addEventListener("click",e=>{e.stopPropagation();try{localStorage.setItem("archive-hq",hqOn()?"0":"1")}catch(x){}paintHQ();toast(hqOn()?"이제 사진을 원본 화질로 저장해요":"사진을 줄여서 저장해요")});
+paintHQ();
+
+/* ---------- 24) 사이즈: 어느 나라 규격으로 적어도 다른 나라 규격이 같이 (일본 포함) ---------- */
+const SYS5=["KR","JP","US","UK","EU"];
+function sizeKind(c){return c==="shoes"?"shoes":c==="bottom"?"bottom":(c==="top"||c==="outer")?"top":""}
+const numOf=s=>{const m=String(s).match(/\d+(?:\.\d+)?/);return m?+m[0]:NaN};
+function nearest(arr,v){let bi=-1,bd=1e9;arr.forEach((x,i)=>{const d=Math.abs(numOf(x)-v);if(d<bd){bd=d;bi=i}});return bd<=Math.max(2.6,v*0.012)?bi:-1}
+function parseSize(kind,text){const t=String(text||"").trim().toUpperCase().replace(/\s+/g," ");if(!t||!SIZE[kind])return null;const R=SIZE[kind].rows;
+  const pre=(t.match(/^(KR|JP|JPN|US|UK|EU|EUR|W)\s*/)||[])[1];const n=numOf(t);
+  const pick=(sys,i)=>i>=0?{sys,idx:i}:null;
+  if(kind==="shoes"){
+    if(/MM/.test(t)||(!pre&&n>=200&&n<=320))return pick("KR",nearest(R.KR,n>320?n/10:n));
+    if(/CM/.test(t)||pre==="JP"||pre==="JPN"||(!pre&&n>=21&&n<=32&&/\./.test(t)))return pick("JP",nearest(R.JP,n));
+    if(pre==="UK")return pick("UK",nearest(R.UK,n));
+    if(pre==="EU"||pre==="EUR"||(!pre&&n>=35&&n<=50))return pick("EU",nearest(R.EU,n));
+    if(pre==="US"||(!pre&&n>=4&&n<=15))return pick("US",nearest(R.US,n));
+    if(!pre&&n>=21&&n<=32)return pick("JP",nearest(R.JP,n));return null}
+  if(kind==="top"){
+    const L=t.replace(/^(US|UK|JP|JPN)\s*/,"").match(/^(3XL|XXXL|XXL|2XL|XL|XS|S|M|L)\b/);
+    if(L){const v=L[1].replace("XXXL","3XL").replace("2XL","XXL");if(pre==="JP"||pre==="JPN"){const i=R.JP.findIndex(x=>x.startsWith(v+" "));return pick("JP",i)}const i=R.US.indexOf(v==="3XL"?"XXL":v);return pick(pre==="UK"?"UK":"US",i>=0?i:(v==="3XL"?5:-1))}
+    if((pre==="JP"||pre==="JPN")&&n>=1&&n<=6)return pick("JP",n-1);
+    if(pre==="EU"||pre==="EUR"||(!pre&&n>=42&&n<=56&&n%2===0))return pick("EU",nearest(R.EU,n));
+    if(!pre&&n>=85&&n<=120)return pick("KR",nearest(R.KR,n));
+    if(!pre&&n>=1&&n<=6&&/^\d$/.test(t))return pick("JP",n-1);return null}
+  if(kind==="bottom"){
+    if(pre==="EU"||pre==="EUR")return pick("EU",nearest(R.EU,n));
+    if((pre==="JP"||pre==="JPN")&&n>=1&&n<=5){const i=R.JP.findIndex(x=>x.startsWith(n+" "));return pick("JP",i)}
+    if(/^(XS|S|M|L|XL|XXL)$/.test(t)){const map={XS:0,S:1,M:2,L:4,XL:6,XXL:7};return pick("US",map[t])}
+    if(n>=24&&n<=42)return pick("KR",nearest(R.KR,n));
+    if(n>=60&&n<=110)return pick("KR",nearest(R.KR,n/2.54));return null}
+  return null}
+function convLine(kind,p){if(!p||!SIZE[kind])return "";const t=SIZE[kind];return SYS5.filter(s=>t.rows[s]).map(s=>`${CC[s]} ${t.fmt[s](t.rows[s][p.idx])}`).join(" · ")}
+function sizeConvText(c,size){const k=sizeKind(c);const p=parseSize(k,size);return p?convLine(k,p):""}
+/* 기록 화면: 사이즈 칸 아래에 환산 + 표에서 고르기 */
+function sizeHelp(){const f=$("fSize");if(!f)return;let h=$("szConv");if(!h){h=document.createElement("div");h.id="szConv";h.className="szconv";f.closest(".fld").appendChild(h)}
+  const k=sizeKind(recCat);if(!k){h.innerHTML="";return}const p=parseSize(k,f.value);
+  h.innerHTML=`${p?`<p class="szline">≈ ${escH(convLine(k,p))}</p>`:f.value.trim()?`<p class="szline dim">이 사이즈는 자동 환산을 못 했어요 · 그대로 저장돼요</p>`:""}<button type="button" class="szpick" id="szPick">나라별 표에서 고르기</button>`}
+function openSizePick(){const k=sizeKind(recCat);if(!k){toast("카테고리를 먼저 골라 주세요");return}const t=SIZE[k];const cur=parseSize(k,$("fSize").value);
+  openEd(t.title+" · 고르기",()=>{$("edBody").innerHTML=`<p class="note" style="margin:14px 2px 0">아무 칸이나 누르면 그 줄로 골라져요. 저장은 누른 나라 규격으로 해요.</p>
+    <div class="szmat"><table><tbody>${SYS5.map(s=>`<tr><th><span class="szmain">${CC[s]}</span></th>${t.rows[s].map((v,i)=>`<td><button type="button" data-s="${s}" data-i="${i}" aria-pressed="${!!cur&&cur.idx===i}">${escH(v)}</button></td>`).join("")}</tr>`).join("")}</tbody></table></div>
+    <p class="note">대략적인 환산이에요. 브랜드마다 달라서 실제로 산 사이즈를 고르는 게 정확해요.</p>`;
+    $("edBody").querySelector(".szmat").onclick=e=>{const b=e.target.closest("button[data-i]");if(!b)return;$("fSize").value=t.fmt[b.dataset.s](t.rows[b.dataset.s][+b.dataset.i]);sizeHelp();closeEd()}},null)}
+document.addEventListener("click",e=>{if(e.target.closest("#szPick"))openSizePick()});
+$("fSize").addEventListener("input",sizeHelp);
+$("cats").addEventListener("click",()=>setTimeout(sizeHelp,50));
+{const _or3=openRec;openRec=function(){const r=_or3.apply(this,arguments);setTimeout(sizeHelp,60);return r}}
+/* 상세 화면: 사이즈 옆에 다른 나라 규격 */
+{const _od4=openDetail;openDetail=function(){const r=_od4.apply(this,arguments);try{const it=ITEMS.find(x=>x.id===dtId);if(it&&it.size){const line=sizeConvText(it.c,it.size);
+  if(line){const dl=$("dtBody").querySelector(".dsec .dlist");const row=dl&&[...dl.children].find(d=>{const t=d.querySelector("dt");return t&&t.textContent==="사이즈"});
+    if(row&&!row.querySelector(".szline")){const p=document.createElement("small");p.className="szline";p.textContent="≈ "+line;row.querySelector("dd").appendChild(p)}}}}catch(e){}return r}}
+window.archiveSize={parseSize,convLine,sizeConvText};
+
+/* ---------- 25) 브랜드 자동 찾기 (페이지에 브랜드 칸이 없을 때) ---------- */
+function guessBrand(doc,html,P,ld){
+  const known=(typeof BR!=="undefined"?BR.brands:[]).flatMap(b=>[b.name,...(b.aka||[])]).filter(Boolean).sort((a,b)=>b.length-a.length);
+  const hay=[P.name,meta(doc,"og:title"),doc.title].join(" ").toLowerCase();
+  for(const k of known)if(k.length>1&&hay.includes(k.toLowerCase()))return k;
+  const mf=ld&&(ld.manufacturer||ld.seller);if(mf){const v=clean(typeof mf==="string"?mf:mf.name);if(v)return v}
+  const desc=meta(doc,"og:description","description");const m1=desc.match(/브랜드\s*[:：]\s*([^\n,|·]{2,30}?)(?:\s{2,}|\s*제품|\s*상품|$)/);if(m1)return clean(m1[1]);
+  for(const th of doc.querySelectorAll("th,dt,td,li span,strong")){const lab=clean(th.textContent);if(/^(브랜드|Brand|BRAND|제조사|제조사\/수입사)\s*[:：]?$/.test(lab)){const nx=th.nextElementSibling;const v=nx&&clean(nx.textContent);if(v&&v.length<=30&&!/정보|상세/.test(v))return v}}
+  const body=clean(doc.body?doc.body.textContent:"").slice(0,60000);const m2=body.match(/(?:브랜드|Brand|BRAND|제조사)\s*[:：]?\s*([A-Za-z가-힣0-9&.'’ \-]{2,30}?)(?=\s{2,}|\s(?:원산지|제조|모델|상품|가격|소재|사이즈)|$)/);if(m2&&!/정보|소개|스토리|더보기/.test(m2[1]))return clean(m2[1]);
+  const bx=doc.querySelector('[class*="brand"] a,[class*="Brand"] a,.brand,.brandName,.brand_name,.prd_brand,[itemprop="brand"]');if(bx){const v=clean(bx.textContent);if(v&&v.length<=30)return v}
+  const t=meta(doc,"og:title")||doc.title;const m3=t.match(/^\s*\[([^\]]{2,25})\]/)||t.match(/^([^()\[\]|]{2,25})\(([A-Za-z0-9 .&'\-]{2,30})\)\s/);if(m3)return clean(m3[1]);
+  return ""}
+
+/* ---------- 26) 무신사 · 29CM 링크 → 브랜드 공식몰에서 대신 가져오기 ---------- */
+function splitBrand(nm){nm=String(nm||"").replace(/\s*-\s*사이즈\s*&\s*후기.*$/,"").replace(/\s*\|\s*(무신사|29CM).*$/i,"").trim();
+  let m=nm.match(/^([^()\[\]]{1,25}?)\s*\(([A-Za-z0-9 .&'’\-]{2,30})\)\s+(.+)$/);if(m)return {ko:clean(m[1]),en:clean(m[2]),name:clean(m[3])};
+  m=nm.match(/^\[([^\]]{1,25})\]\s*(.+)$/);if(m)return {ko:clean(m[1]),en:/^[A-Za-z0-9 .&'’\-]+$/.test(m[1])?clean(m[1]):"",name:clean(m[2])};
+  const known=(typeof BR!=="undefined"?BR.brands:[]).flatMap(b=>[b.name,...(b.aka||[])]).filter(Boolean).sort((a,b)=>b.length-a.length);
+  for(const k of known)if(nm.toLowerCase().startsWith(k.toLowerCase()+" "))return {ko:k,en:/^[A-Za-z0-9 .&'’\-]+$/.test(k)?k:"",name:clean(nm.slice(k.length))};
+  return {ko:"",en:"",name:nm}}
+function officialFromBR(b){if(typeof BR==="undefined")return "";const keys=[b.ko,b.en].filter(Boolean);const x=BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&keys.some(k=>brKey(k)===brKey(n))));
+  if(!x)return "";const l=(x.links||[]).find(l=>/공식/.test(l.label||""))||(x.links||[])[0];return l?originOf(l.url):""}
+async function guessOfficial(b){if(!b.en)return "";const slug=b.en.toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");if(slug.length<3)return "";
+  const cands=[`https://${slug}.co.kr`,`https://www.${slug}.co.kr`,`https://${slug}.com`,`https://www.${slug}.com`,`https://${slug}.kr`,`https://${slug}official.com`];
+  const want=[b.en,b.ko].filter(Boolean).map(x=>x.toLowerCase().replace(/\s+/g,""));
+  const one=async u=>{const html=await getText(u+"/");const d=new DOMParser().parseFromString(html,"text/html");const t=(meta(d,"og:site_name","og:title")+" "+(d.title||"")).toLowerCase().replace(/\s+/g,"");
+    if(want.some(w=>t.includes(w)))return u;throw new Error("다른 사이트")};
+  return await Promise.race([Promise.any(cands.map(one)).catch(()=>""),new Promise(r=>setTimeout(()=>r(""),6000))])}
+function rememberOfficial(b,o){if(typeof BR==="undefined"||!o)return;const nm=b.ko||b.en;let x=brFind(BR.brands,nm)||(b.en&&brFind(BR.brands,b.en));
+  if(!x){x={id:"b"+Date.now().toString(36),name:nm,sub:"",links:[],shops:[],aka:[]};BR.brands.push(x)}x.aka=x.aka||[];if(b.en&&brKey(b.en)!==brKey(x.name)&&!x.aka.some(a=>brKey(a)===brKey(b.en)))x.aka.push(b.en);
+  x.links=x.links||[];if(!x.links.some(l=>originOf(l.url)===o))x.links.unshift({label:"공식몰",url:o+"/"});saveBR()}
+async function toOfficial(raw,nm){const st=$("fetchStatus");const b=splitBrand(nm);
+  if(b.ko&&!$("fBrand").value)$("fBrand").value=b.ko;
+  if(b.name&&b.name!==nm&&$("fName").value===nm)$("fName").value=b.name;
+  if(!b.ko&&!b.en)return;
+  st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 찾는 중…`;
+  let o=officialFromBR(b);if(!o)o=await guessOfficial(b);
+  if(!o){const u=prompt(`${b.ko||b.en} 공식몰 주소를 알면 넣어 주세요 (다음부터 기억해요 · 모르면 취소)`);if(u){o=originOf(/^https?:/.test(u)?u:"https://"+u)}}
+  if(!o||noFetch(o)){st.textContent=`무신사는 링크와 이름만 넣었어요 · ${b.ko||b.en} 공식몰을 못 찾았어요 · 사진은 캡처해서 추가해 주세요`;return}
+  rememberOfficial(b,o);
+  st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 약관 확인 중…`;let t=shopStore().terms[o];if(!t){try{t=await checkTerms(o)}catch(e){}}
+  if(t&&t.result==="ban"){st.textContent=`${b.ko||b.en} 공식몰은 약관에서 자동 수집을 금지해서 가져오지 않았어요 · 링크와 이름만 저장했어요`;return}
+  st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰에서 같은 상품 찾는 중…`;
+  const qs=[shortQuery(b.name,b.ko)||normN(b.name),...(raw.match(/[A-Za-z][A-Za-z0-9 \-]{6,}/g)||[]).map(x=>x.trim())].filter(Boolean);let best=null;
+  for(const q of qs){let list=[];try{list=await searchShop(o,q)}catch(e){}for(const c of list){const sc=Math.max(simName(b.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}if(best)break}
+  if(!best){st.textContent=`${b.ko||b.en} 공식몰에서 같은 상품을 못 찾았어요 · 무신사 링크와 이름만 저장했어요`;return}
+  $("fLink").value=best.url;await realFetch();
+  const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`공식몰(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요 · `+cur.replace(/^✓\s*/,"")}
+window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
 })();

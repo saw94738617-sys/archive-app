@@ -494,6 +494,10 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .smb button.p{background:var(--indigo);border-color:var(--indigo);color:var(--cream);font-weight:700}
 #app[data-look="dark"] .smr{border-color:#2a303c}#app[data-look="dark"] .smb button{border-color:#3a4150}
 #app[data-look="dark"] .tb.ok{background:#1f3a26;color:#9fd3a9}#app[data-look="dark"] .tb.ban{background:#43251c;color:#f0a58a}#app[data-look="dark"] .tb.q,#app[data-look="dark"] .tb.off{background:#2a303c;color:#aab0bd}
+.szconv .szline{margin:6px 2px 0;font-size:12px;color:var(--orange);font-weight:600;line-height:1.5}.szconv .szline.dim{color:var(--muted);font-weight:400}
+.szpick{margin-top:6px;border:1.5px dashed #c9bfa8;background:none;border-radius:10px;padding:7px 12px;font:inherit;font-size:12.5px;color:var(--indigo);cursor:pointer}
+.dlist dd .szline{display:block;font-size:11.5px;color:var(--orange);font-weight:600;margin-top:3px;text-align:right}
+#app[data-look="dark"] .szpick{border-color:#4a5262}
 .dvin{display:flex;gap:8px}
 .dvin input{flex:1;min-width:0;background:#11151c;border:1px solid #2b3242;border-radius:10px;color:#e7e3d8;padding:10px 12px;font:inherit;font-size:13px}
 .dvin button,.dvbtns button{background:#2b3242;color:#e7e3d8;border:0;border-radius:10px;padding:10px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
@@ -983,6 +987,7 @@ svg{display:block}
       <div class="sg"><h3>기록</h3><div class="card2">
         <div class="row"><span class="lb">가격 기록 기준<small>할인가 말고 정가로 남길지 정해요</small></span><div class="seg" data-seg><button type="button" aria-pressed="true">정가</button><button type="button" aria-pressed="false">결제가</button></div></div>
         <div class="row rowcol"><span class="lb">쓰는 통화 · 나라<small>고른 나라의 사이즈 표기도 같이 쓸 수 있어요</small></span><div class="curs" id="curs"><button type="button" data-cc="KR" aria-pressed="true">₩ 한국</button><button type="button" data-cc="JP" aria-pressed="true">¥ 일본</button><button type="button" data-cc="US" aria-pressed="true">$ 미국</button><button type="button" data-cc="EU" aria-pressed="false">€ 유럽</button><button type="button" data-cc="UK" aria-pressed="false">£ 영국</button></div></div>
+        <div class="row"><span class="lb">사진 원본 화질로 저장<small id="hqSub">끄면 줄여서 저장해요 (용량 절약)</small></span><button class="sw" type="button" role="switch" aria-checked="false" id="swHQ" aria-label="사진 원본 화질로 저장"></button></div>
         <div class="row"><span class="lb">엔화·달러는 원화로 바꿔 보기<small>해외에서 산 옷도 원화로 합산해요</small></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="원화로 바꿔 보기"></button></div>
         <button class="row" type="button" id="catEditBtn"><span class="lb">카테고리 편집<small>이름 바꾸기 · 추가 · 순서 바꾸기</small></span><span class="val" id="catEditVal"></span></button>
       </div></div>
