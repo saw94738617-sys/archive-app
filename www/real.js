@@ -177,6 +177,12 @@ async function realFetch(){
   $("fetchStatus").innerHTML='<span class="spin"></span>상품 페이지 읽는 중…';$("fetchBtn").disabled=true;
   try{
     const raw=$("fLink").value;try{v=await resolveLink(v)}catch(e){}
+    let termsNote="";
+    if(!noFetch(v)&&NATIVE){const o=originOf(v),st0=shopStore();let t=st0.terms[o];
+      if(!t){$("fetchStatus").innerHTML='<span class="spin"></span>처음 보는 쇼핑몰이에요 · 약관 확인 중…';try{t=await checkTerms(o)}catch(e){}}
+      if(t&&t.result==="ban"){addSeller(v);const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
+        $("fetchStatus").innerHTML=`⚠ 이 쇼핑몰은 약관에서 자동 수집을 금지해서 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 추가해 주세요 <button type="button" class="altshop" data-why="${escH(o)}">이유 보기</button>`;$("fLink").value="";return}
+      termsNote=t&&t.result==="clear"?"약관 확인됨 · ":t&&t.result==="unknown"?"약관 페이지는 못 찾았어요 · ":""}
     if(noFetch(v)){addSeller(v);const s0=recSellers.find(x=>x.url===v);if(s0){s0.shop=noFetchShop(v)||s0.shop;renderSellers()}
       const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
       $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
@@ -195,7 +201,7 @@ async function realFetch(){
     recCands=got.filter(Boolean);
     if(recCands.length){if(!recPhotoUrl&&!$("photo").classList.contains("has")){recSel=[0];applyPick()}else recSel=[];renderPicker();fill.push("사진 "+recCands.length+"장")}
     if(P.stock)fill.push("재고");
-    $("fetchStatus").textContent=fill.length?"✓ "+fill.join(" · ")+" 가져왔어요":"페이지에서 읽을 수 있는 정보가 없었어요 · 직접 적어주세요";
+    $("fetchStatus").textContent=(fill.length?"✓ "+termsNote+fill.join(" · ")+" 가져왔어요":"페이지에서 읽을 수 있는 정보가 없었어요 · 직접 적어주세요");
     $("fLink").value="";
   }catch(e){console.warn(e);addSeller(v);$("fetchStatus").textContent="이 쇼핑몰은 페이지를 읽지 못했어요 · 판매처만 추가했어요"+(e&&e.message?" ("+String(e.message).slice(0,40)+")":"");const nm=nameFromUrl(v);if(nm&&!$("fName").value)$("fName").value=nm}
   finally{$("fetchBtn").disabled=false}
@@ -543,6 +549,7 @@ document.addEventListener("click",e=>{const nb=e.target.closest("#dtNaver");if(n
     run()},()=>{reDetail()})},true);
 const _od2=openDetail;openDetail=function(id){_od2(id);try{const h=$("dtBody").querySelector(".st-h");if(h&&!$("dtAlt")){const b=document.createElement("button");b.type="button";b.className="st-ref";b.id="dtAlt";b.textContent="＋ 판매처 찾기";h.appendChild(b);const n=document.createElement("button");n.type="button";n.className="st-ref";n.id="dtNaver";n.textContent="네이버 ↗";h.appendChild(n)}}catch(e){}};
 window.archiveShopMgr=openShopMgr;
+document.addEventListener("click",e=>{if(e.target.closest("[data-why]"))openShopMgr()});
 
 /* ---------- 11) 세부 카테고리 바로 추가 · 위시 순위 기본값 ---------- */
 function paintSubAdd(){const sc=$("subcats");if(!sc||sc.hidden||sc.querySelector(".subadd"))return;const b=document.createElement("button");b.type="button";b.className="subadd";b.textContent="＋ 직접 추가";sc.appendChild(b)}
@@ -886,6 +893,6 @@ const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM"};
 function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
 function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
 function nameFromShare(t){t=String(t||"");const i=t.search(/https?:\/\//i);let s=(i>0?t.slice(0,i):"").replace(/^\s*\[[^\]]{1,15}\]\s*/,"").replace(/\s+/g," ").trim();return s.length>=2&&s.length<=120?s:""}
-{const _rp2=readProduct;readProduct=async function(url){url=canon(url);if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
+{const _rp2=readProduct;readProduct=async function(url){url=canon(url);const _st=shopStore(),_o=originOf(url);if(_st.terms[_o]&&_st.terms[_o].result==="ban"){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}if(noFetch(url)){const e=new Error("이 쇼핑몰은 약관상 앱이 자동으로 읽을 수 없어요");e.noFetch=true;throw e}return _rp2(url)};window.archiveReadProduct=readProduct}
 window.__pickUrl=pickUrl;window.__resolveLink=resolveLink;
 })();
