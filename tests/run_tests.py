@@ -109,8 +109,10 @@ def run():
         check("재고 있는 사이즈 전부 보여주기", pg.evaluate("""()=>{ITEMS.push({id:'c1',kind:'wish',c:'top',name:'S',sellers:[{url:'https://x/1',shop:'x',stock:{S:'out',M:'in',L:'in'}}]},
             {id:'c2',kind:'wish',c:'shoes',name:'B',sellers:[{url:'https://x/2',shop:'x',mto:true}]});renderPins();
             return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["재고 M · L", "✂ 주문 제작 가능"])
-        check("공식몰 재고 우선", pg.evaluate("""()=>{ITEMS.length=0;ITEMS.push({id:'j1',kind:'wish',c:'shoes',brand:'JELADO',name:'V',sellers:[{url:'https://jelado.com/p',shop:'JELADO',stock:{'270':'in','275':'out'}},{url:'https://rino.test/p',shop:'rino',stock:{'280':'in'}}]});renderPins();
-            return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["재고 270"])
+        check("내 사이즈 기준 위아래 한 칸", pg.evaluate("""()=>{ITEMS.length=0;ITEMS.push({id:'w1',kind:'wish',c:'shoes',name:'B',size:'270',sellers:[{url:'https://x/9',shop:'x',stock:{'250':'in','260':'in','265':'out','270':'in','275':'out','280':'in'}}]});renderPins();
+            return [...document.querySelectorAll('.pst .w')].map(e=>e.textContent)}"""), ["265 품절", "270 ✓", "275 품절"])
+        check("공식몰 재고 우선", pg.evaluate("""()=>{ITEMS.length=0;ITEMS.push({id:'j1',kind:'wish',c:'shoes',brand:'JELADO',name:'V',size:'270',sellers:[{url:'https://jelado.com/p',shop:'JELADO',stock:{'270':'in','275':'out'}},{url:'https://rino.test/p',shop:'rino',stock:{'280':'in'}}]});renderPins();
+            return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["270 ✓275 품절"])
         pg.close()
 
         # ---- 2) 캡처 읽기 (폰 글자 읽기를 흉내) ----
