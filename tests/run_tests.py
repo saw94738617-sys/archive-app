@@ -119,6 +119,10 @@ def run():
           try{localStorage.setItem('archive-prio-dir','asc')}catch(e){}renderPins();const r=[...document.querySelectorAll('#masonry .pin[data-id]')].map(x=>x.dataset.id);
           ITEMS.length=0;keep.forEach(x=>ITEMS.push(x));renderPins();return r})()""")
         check("같은 순위끼리는 카테고리 순서 (아우터 → 하의 → 신발)", po, ["o1", "b1", "s1", "a2"])
+        off = pg.evaluate("""(()=>{BR.brands.push({id:'nmt',name:'노매뉴얼',aka:['NOMANUAL'],links:[{label:'공식몰',url:'https://nomanual-official.com/'}],shops:[]});
+          const it={brand:'노매뉴얼'};const r=[window.archiveIsOfficial(it,{shop:'nomanual',url:'https://shop.example.com/p/1'}),window.archiveIsOfficial(it,{shop:'x',url:'https://en.nomanual-official.com/p/1'}),window.archiveIsOfficial(it,{shop:'무신사',url:'https://www.musinsa.com/products/1'})];
+          BR.brands=BR.brands.filter(x=>x.id!=='nmt');return r})()""")
+        check("공식몰 알아보기: 영어 이름 · 하위 주소 (노매뉴얼)", off, [True, True, False])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"

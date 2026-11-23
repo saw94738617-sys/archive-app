@@ -210,8 +210,10 @@ window.archiveStockFor=stockFor;
 /* 브랜드 공식몰 판매처 알아보기: 등록된 공식몰 주소 · 쇼핑몰 이름이 브랜드와 같음 · 주소에 브랜드 영문 이름 */
 function isOfficialSeller(it,s){if(!it||!s||!s.url)return false;if(s.official)return true;const b=brKey(it.brand||"");if(!b)return false;
   let host="";try{host=new URL(s.url).hostname.replace(/^www\.|^m\./,"")}catch(e){return false}
-  try{const o=officialFromBR({ko:it.brand,en:it.brand},true);if(o&&new URL(o).hostname.replace(/^www\.|^m\./,"")===host)return true}catch(e){}
-  if(brKey(s.shop||"")===b)return true;const hb=host.split(".")[0].replace(/[^a-z0-9]/g,"");return b.length>=3&&/^[a-z0-9]+$/.test(b)&&(hb===b||hb===b+"official"||hb==="the"+b)}
+  const base=h=>{const p=h.split(".");return p.slice(/\.(co|or|ne|go)\.[a-z]{2}$/.test(h)?-3:-2).join(".")};
+  try{const o=officialFromBR({ko:it.brand,en:it.brand},true);if(o&&base(new URL(o).hostname)===base(host))return true}catch(e){}
+  const rec=typeof BR!=="undefined"?brFind(BR.brands,it.brand||""):null;const names=[it.brand,...((rec&&[rec.name,...(rec.aka||[])])||[])].filter(Boolean).map(brKey);
+  if(names.includes(brKey(s.shop||"")))return true;const hb=host.split(".")[0].replace(/[^a-z0-9]/g,"");return b.length>=3&&/^[a-z0-9]+$/.test(b)&&(hb===b||hb===b+"official"||hb==="the"+b)}
 window.archiveIsOfficial=isOfficialSeller;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const sp=splitOpt(o.option_value_orginal||o.option_value||o.option_name||"");if(!sp)return;const k=sp.size;
@@ -346,6 +348,8 @@ async function realFetch(){
 async function refreshItem(it,quiet){
   const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);
       /* 공식몰이 기준: 위시 가격 · 사이즈표를 공식몰 값으로 맞춰요 */
+      if(isOfficialSeller(it,s)&&P.name){const left=String(it.name||"").replace(/\d+(?:\.\d)?\s*[만천]/g," ").replace(/[ⓘ①\d]/g," ").split(/\s+/).filter(w=>w&&![it.brand,...((typeof BR!=="undefined"&&(brFind(BR.brands,it.brand||"")||{}).aka)||[])].some(b=>b&&brKey(b)===brKey(w))).join("");
+        if(left.length<3){it.name=clean(P.name);it.upd=Date.now()}}
       if(isOfficialSeller(it,s)){const fp=fmtPrice(P.price,P.currency);if(fp&&it.kind==="wish"&&it.price!==fp){it.price=fp;it.upd=Date.now()}
         if(P.chart&&P.chart.rows&&P.chart.rows.length&&(!it.chart||it.chartGen||it.chartSrc!=="official")){it.chart=P.chart;it.chartGen=false;it.chartSrc="official";it.upd=Date.now()}}const before={...(s.stock||{})},bp=s.price;
       const wasClosed=s.closed;if(P.mto){s.mto=true;s.closed=!!P.closed}if(s.mto&&!quiet&&wasClosed!==undefined&&wasClosed!==s.closed)toast(`${s.shop}: ${s.closed?"주문이 마감됐어요":"주문이 다시 열렸어요"}`);s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
@@ -1604,6 +1608,11 @@ const CUR_CODE={"₩":"KRW","¥":"JPY","$":"USD"},FX_FALLBACK={KRW:1,JPY:0.107,U
 async function fxRates(){try{const c=JSON.parse(localStorage.getItem("archive-fx")||"null");if(c&&Date.now()-c.at<12*3600*1000)return c}catch(e){}
   try{const j=JSON.parse(await getText("https://api.frankfurter.app/latest?from=KRW&to=USD,JPY"));if(j&&j.rates&&j.rates.USD&&j.rates.JPY){const c={at:Date.now(),date:j.date,r:{KRW:1,USD:j.rates.USD,JPY:j.rates.JPY}};try{localStorage.setItem("archive-fx",JSON.stringify(c))}catch(e){}return c}}catch(e){}
   return {at:0,date:"",r:FX_FALLBACK,rough:true}}
+/* 상세 화면 가격을 누르면 ₩ → ¥ → $ 순서로 바꿔서 저장 (그날 환율) */
+document.addEventListener("click",async e=>{if(!e.target.closest("#dtCur"))return;const it=ITEMS.find(x=>x.id===dtId);if(!it||!it.price)return;
+  const m=String(it.price).match(/^\s*([₩¥$])\s*([\d,.]+)/);if(!m)return;const order=["₩","¥","$"];const from=m[1],to=order[(order.indexOf(from)+1)%3];
+  const v=parseFloat(m[2].replace(/,/g,""));if(!v)return;const fx=await fxRates();const n=window.archiveFx.conv(v,CUR_CODE[from],CUR_CODE[to],fx.r);
+  it.price=to+n.toLocaleString("ko-KR");it.upd=Date.now();if(typeof dtSave==="function")dtSave(it,`${from}${m[2]} → ${it.price} · ${fx.rough?"대략 환율":"환율 "+fx.date}`)});
 window.archiveFx={rates:fxRates,conv:(v,from,to,r)=>{const k=v/r[from]*r[to];return to==="KRW"?Math.round(k/100)*100:Math.round(k)}};
 {let prev="₩";const seg=$("cur");if(seg){
   seg.addEventListener("pointerdown",()=>{const p=seg.querySelector('button[aria-pressed="true"]');prev=p?p.textContent:"₩"},true);
