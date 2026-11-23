@@ -1120,6 +1120,8 @@ document.addEventListener("click",e=>{if(e.target.closest("#alFreq button"))setT
 /* 다른 앱에서 '공유 → 아카이브': 위시로 기록 화면을 열고 공유받은 제목 · 링크로 채워요 (공식몰이 있으면 거기서 가져와요) */
 async function fromShare(text,sub){text=String(text||"");sub=String(sub||"").trim();
   const raw=sub&&!text.includes(sub)&&/https?:\/\//i.test(text)&&!nameFromShare(text)?sub+" "+text:text;
+  {const pk=window.__pickFor;if(pk&&Date.now()-pk.at<15*60*1000&&!rec.classList.contains("on")){window.__pickFor=null;const it=ITEMS.find(x=>x.id===pk.id);
+    if(it&&typeof dtId!=="undefined"&&dtId===it.id&&$("dtEdit")){$("dtEdit").click();await new Promise(r=>setTimeout(r,250))}}}
   if(!rec.classList.contains("on")){openRec();setKind("wish")}
   const u=pickUrl(raw);
   try{localStorage.setItem("archive-lastshare",JSON.stringify({text,sub,at:Date.now()}))}catch(e){}
@@ -1330,7 +1332,9 @@ document.addEventListener("click",async e=>{const b=e.target.closest("#dtChart")
   if(!NATIVE){toast("사이즈표 가져오기는 폰 앱에서 돼요");return}
   const st=$("dtChartSt");b.disabled=true;const say=t=>{if(st){st.hidden=false;st.innerHTML='<span class="spin"></span>'+escH(t)}};
   const why=[];const how=await fillChart(it,say,why);b.disabled=false;
-  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){st.textContent="사이즈표를 못 찾았어요 · "+(why.length?why.join(" · ")+" · ":"")+"카테고리를 신발로 고르거나, 판매처 링크 · 사이즈표 사진을 넣어 보세요"}});
+  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){const o=it.brand&&officialFromBR({ko:it.brand,en:it.brand});
+    st.innerHTML=escH("사이즈표를 못 찾았어요 · "+(why.length?why.join(" · "):""))+(o?"<br>"+offPickBtn(o,it.name,it.brand).replace("data-offpick=",`data-pickid="${escH(it.id)}" data-offpick=`):"<br><small>판매처 링크나 사이즈표 사진을 넣어 보세요</small>");
+    devLog({k:"fail",host:o?new URL(o).hostname:"",msg:"사이즈표 못 찾음: "+why.join(" / ")})}});
 /* 설정: 사이즈표 없는 옷 한꺼번에 채우기 */
 function chartAllRow(){const g=$("gdAgain");if(!g||$("chartAll"))return;const r=document.createElement("button");r.type="button";r.className="row";r.id="chartAll";
   r.innerHTML='<span class="lb">사이즈표 없는 옷 채우기<small>이미 저장한 옷도 쇼핑몰 · 상세 이미지에서 사이즈표를 찾아 채워요</small></span><span class="val"></span>';g.after(r)}
@@ -1505,13 +1509,18 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   const qs=[...new Set([shortQuery(b.name,b.ko)||normN(b.name),base,tk.slice(0,2).join(" "),tk.join(""),...(raw.match(/[A-Za-z][A-Za-z0-9 \-]{6,}/g)||[]).map(x=>x.trim())].filter(x=>x&&x.length>=2))];let best=null;const tried=[];
   for(const q of qs){let list=[];try{list=await searchShop(o,q)}catch(e){}tried.push(q+":"+list.length);for(const c of list){const sc=Math.max(simName(b.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}if(best)break}
   if(!best){devLog({k:"fail",host:new URL(o).hostname,msg:"공식몰 검색: "+tried.join(" / ")});
-    st.innerHTML=`${escH(b.ko||b.en)} 공식몰 검색에서 같은 상품을 못 찾았어요.<br><button type="button" class="altgo" id="offSearchWeb" style="margin-top:6px">🔎 공식몰에서 직접 찾기</button><br><small>찾은 상품 페이지 주소를 복사해 위 링크 칸에 붙여넣고 '가져오기'를 누르면 공식몰 사진 · 재고 · 사이즈표를 가져와요</small>`;
-    const bt=$("offSearchWeb");if(bt)bt.onclick=()=>window.open(o+"/product/search.html?keyword="+encodeURIComponent(qs[0]),"_blank","noopener");return}
+    st.innerHTML=`${escH(b.ko||b.en)} 공식몰에서 같은 상품을 자동으로 못 찾았어요.<br>`+offPickBtn(o,b.name||nm,b.ko||b.en);return}
   if(!_conf)offEvAdd(o,"이 상품도 있어요: "+clean(best.name||"").slice(0,30));
   $("fLink").value=best.url;await realFetch();
   const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`${OFFW}(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요${_conf?"":" · 브랜드 관리에서 맞는지 확인해 주세요"} · `+cur.replace(/^✓\s*/,"")}
 window.archiveOfficial={splitBrand,guessOfficial,toOfficial,searchShop,simName};
 
+/* 자동으로 못 찾으면: 공식몰 안에서 검색한 화면(구글 site: 검색)을 열고, 사용자가 상품을 골라 공유 → 아카이브 */
+function offPickUrl(o,name,brand){let host=o;try{host=new URL(o).hostname.replace(/^www\./,"")}catch(e){}const q=(shortQuery(name||"",brand||"")||String(name||"")).trim();
+  return "https://www.google.com/search?q="+encodeURIComponent("site:"+host+" "+q)}
+function offPickBtn(o,name,brand){const host=(()=>{try{return new URL(o).hostname.replace(/^www\./,"")}catch(e){return o}})();
+  return `<button type="button" class="altgo offpick" data-offpick="${escH(offPickUrl(o,name,brand))}" style="margin-top:8px">🔎 ${escH(host)}에서 직접 고르기</button><br><small>상품을 열고 <b>공유 → 아카이브</b>를 누르면 이 기록에 공식몰 사진 · 가격 · 재고 · 사이즈표가 채워져요</small>`}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-offpick]");if(!b)return;e.preventDefault();const id=b.dataset.pickid;if(id)window.__pickFor={id,at:Date.now()};window.open(b.dataset.offpick,"_blank","noopener")});
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
 function askOfficial(){const st=$("fetchStatus");
   const _sn=noFetchShop(($("fLink")||{}).value||"")||(recSellers.map(x=>noFetchShop(x.url)).filter(Boolean).pop())||"이 쇼핑몰";st.innerHTML=`<b>${_sn}가 링크만 보내서 상품 이름을 몰라요.</b><br>이 화면 그대로 두고 ${_sn}에서 상품 화면을 <b>캡처 → 공유 → 아카이브</b>하면 이 기록에 합쳐서 공식몰을 찾아요.<br><small>브랜드와 이름을 직접 적고 아래 버튼을 눌러도 돼요.</small><br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
@@ -1565,6 +1574,14 @@ function renderNeed(){try{const home=$("home");if(!home||typeof BR==="undefined"
   if(!el){el=document.createElement("button");el.type="button";el.id="needBar";el.className="needbar";const hero=home.querySelector(".hero");if(hero)hero.after(el);else home.prepend(el);el.onclick=()=>{BR.tab="brand";openBR()}}
   el.innerHTML=`<b>확인 필요</b> ${[cand?`공식몰 후보 ${cand}곳 맞는지 확인`:"",none?`공식몰 없는 브랜드 ${none}곳`:""].filter(Boolean).join(" · ")} <span>›</span>`}catch(e){}}
 window.renderNeed=renderNeed;
+/* 문제 보내기: 못 읽은 사이트와 이유만 모아 복사 (개인 기록 · 사진 · 계정 정보 없음) */
+(()=>{const dr=$("drawer");const set=$("openSet");if(!dr||!set||$("sendIssues"))return;const b=document.createElement("button");b.className="mi";b.type="button";b.id="sendIssues";b.innerHTML="문제 보내기 <span>↗</span>";set.after(b);
+  b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const fails=L.filter(x=>x.k==="fail"||x.k==="err");
+    const by={};fails.forEach(x=>{const k=(x.host||"?")+" · "+String(x.msg||"").slice(0,120);by[k]=(by[k]||0)+1});
+    const lines=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([k,n])=>`- ${k}${n>1?" (×"+n+")":""}`);
+    const ver=(window.ARCHIVE_VERSION||"")+"";const txt=`[아카이브 문제 보고] ${ver}\n`+(lines.length?lines.join("\n"):"- 기록된 문제가 없어요");
+    try{await navigator.clipboard.writeText(txt)}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy")}catch(_){}t.remove()}
+    toast(lines.length?`문제 ${lines.length}가지를 복사했어요 · Claude 채팅에 붙여넣어 주세요`:"기록된 문제가 없어요")}})();
 /* 캡처로 넣은 'OO (검색)': 그 앱에서 검색 화면을 열고, 사용자가 상품을 골라 공유하면 진짜 링크로 바뀌어요 */
 document.addEventListener("click",e=>{const b=e.target.closest("[data-linkfix]");if(!b)return;e.preventDefault();const s=recSellers[+b.dataset.linkfix];if(!s)return;
   const nm=s.shop.replace(/\s*\(검색\)$/,"");window.open(s.url,"_blank","noopener");toast(`${nm}에서 상품을 열고 공유 → 아카이브를 누르면 이 자리에 들어가요`)});
