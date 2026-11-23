@@ -1520,7 +1520,7 @@ function myCols(it){
 function mineIdx(cols,c,unit){return myCols({c,chart:{cols,rows:[],unit}}).names.map(n=>cols.indexOf(n))}
 function pinHTML(it){
   const wish=it.kind==="wish";
-  const _mto=(it.sellers||[]).length&&(it.sellers||[]).some(s=>s.mto)&&(it.sellers||[]).every(s=>s.mto||!(s.stock&&Object.keys(s.stock).length));const badge=(wish?`<div class="badge">WISH · ${prioNum(it.priority)}순위</div>`:"")+(_mto?`<div class="badge mtob">주문 제작</div>`:"");
+  const _mto=(it.sellers||[]).length&&(it.sellers||[]).some(s=>s.mto)&&(it.sellers||[]).every(s=>s.mto||!(s.stock&&Object.keys(s.stock).length));const badge=(wish?`<div class="badge">WISH · ${prioNum(it.priority)}순위</div>`:"");
   const ph=it.photo?`<div class="ph" style="aspect-ratio:${it.ar||"4/5"}"><img src="${escH(it.photo)}" alt="${escH(it.name)}">${badge}</div>`
     :`<div class="ph bagph">${escH((it.brand||it.name).slice(0,10))}${badge}</div>`;
   const sub=[catLabel(it.c,it.s),it.size,wish?"위시":""].filter(Boolean).map(escH).join(" · ");
