@@ -131,6 +131,9 @@ def run():
         check("잘못 들어간 이름 'NOMANUAL 노매뉴얼 0 21만' → 상품 이름", nmfix, "TRIBAL TRACK JACKET - BLACK")
         wd = pg.evaluate("""async()=>{const L=await window.archiveOfficial.searchShop('https://wd.test','CL WOVEN LEATHER BELT');return L.map(x=>x.url).filter(u=>u.includes('1280')).length}""")
         check("영어 상품 이름: 짧은 단어(CL) 건너뛰고 다음 단어로 찾기", wd, 1)
+        lg = pg.evaluate("""async()=>{localStorage.setItem('archive-devlog','[]');await window.archiveChartForItem({id:'lg',name:'테스트 자켓',kind:'wish',c:'outer',sellers:[{shop:'x',url:'https://t.test/nm'}]},[]);
+          const L=JSON.parse(localStorage.getItem('archive-devlog')||'[]');const f=L.find(x=>x.k==='fail');return f?[f.url,f.msg.startsWith('사이즈표 못 가져옴')]:null}""")
+        check("사이즈표 못 가져오면 문제 보내기에 링크와 함께 남기기", lg, ["https://t.test/nm", True])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"

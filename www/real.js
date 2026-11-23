@@ -349,6 +349,7 @@ async function realFetch(){
 /* 재고 다시 확인 */
 async function refreshItem(it,quiet){
   const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);
+      if(!P.stock&&!P.whole&&!P.stockBy&&!P.mto){let h="";try{h=new URL(s.url).hostname}catch(e){}devLog({k:"fail",host:h,url:s.url,msg:"재고 사이즈 못 읽음 · "+String(it.name||"").slice(0,30)})}
       /* 공식몰이 기준: 위시 가격 · 사이즈표를 공식몰 값으로 맞춰요 */
       /* 브랜드 줄이 이름으로 들어간 경우(예: 'NOMANUAL 노매뉴얼 0 21만') → 읽은 상품 이름으로 */
       if(P.name){const nm=String(it.name||"");let hostW="";try{hostW=new URL(s.url).hostname.replace(/^www\.|^m\./,"").split(".")[0]}catch(e){}
@@ -1365,6 +1366,8 @@ async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=s
   const shoeLike=it.c==="shoes"||SHOE_RE.test(it.name||"")||/^\d{3}$/.test(String(it.size||"").trim());
   if(shoeLike&&typeof SIZE!=="undefined"){const K=SIZE.shoes.rows.KR;let i=K.indexOf(String(parseInt(it.size)||""));const a=i>=0?Math.max(0,i-3):2,b=Math.min(K.length,a+7);
     gen=shoeChart(K.slice(a,b));if(gen)return {chart:gen,how:"일반 신발 환산표"+(why.length?" ("+why[0]+")":""),gen:true}}
+  {const ls=(it.sellers||[]).map(x=>x.url).filter(u=>/^https?:/.test(u||""));const u=ls.find(x=>!noFetch(x))||ls[0]||"";let h="";try{h=new URL(u).hostname}catch(e){}
+    devLog({k:"fail",host:h,url:u,msg:"사이즈표 못 가져옴"+(why.length?": "+why.join(" / "):"")+" · "+String(it.name||"").slice(0,30)})}
   return null}
 window.archiveChartForItem=(it,w)=>chartForItem(it,null,w);
 async function fillChart(it,say,why){const r=await chartForItem(it,say,why);if(!r)return false;it.chart=r.chart;it.chartSrc=r.official?"official":"";if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
@@ -1377,7 +1380,7 @@ document.addEventListener("click",async e=>{const b=e.target.closest("#dtChart")
   const why=[];const how=await fillChart(it,say,why);b.disabled=false;
   if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){const hasOff=(it.sellers||[]).some(x=>isOfficialSeller(it,x));const o=!hasOff&&it.brand&&officialFromBR({ko:it.brand,en:it.brand});if(hasOff&&!why.length)why.push("공식몰 페이지에서 표를 못 알아봤어요 · 사이즈표 부분을 캡처해서 📷 사진으로 넣어 주세요");
     st.innerHTML=escH("사이즈표를 못 찾았어요 · "+(why.length?why.join(" · "):""))+(o?"<br>"+offPickBtn(o,it.name,it.brand).replace("data-offpick=",`data-pickid="${escH(it.id)}" data-offpick=`):"<br><small>판매처 링크나 사이즈표 사진을 넣어 보세요</small>");
-    devLog({k:"fail",host:o?new URL(o).hostname:"",msg:"사이즈표 못 찾음: "+why.join(" / ")})}});
+  }});
 /* 설정: 사이즈표 없는 옷 한꺼번에 채우기 */
 function chartAllRow(){const g=$("gdAgain");if(!g||$("chartAll"))return;const r=document.createElement("button");r.type="button";r.className="row";r.id="chartAll";
   r.innerHTML='<span class="lb">사이즈표 없는 옷 채우기<small>이미 저장한 옷도 쇼핑몰 · 상세 이미지에서 사이즈표를 찾아 채워요</small></span><span class="val"></span>';g.after(r)}
@@ -1666,7 +1669,7 @@ window.archiveFx={rates:fxRates,conv:(v,from,to,r)=>{const k=v/r[from]*r[to];ret
 /* 문제 보내기: 못 읽은 사이트와 이유만 모아 복사 (개인 기록 · 사진 · 계정 정보 없음) */
 (()=>{const dr=$("drawer");const set=$("openSet");if(!dr||!set||$("sendIssues"))return;const b=document.createElement("button");b.className="mi";b.type="button";b.id="sendIssues";b.innerHTML="문제 보내기 <span>↗</span>";set.after(b);
   b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const fails=L.filter(x=>x.k==="fail"||x.k==="err"||x.k==="warn"||x.k==="user");
-    const by={};fails.forEach(x=>{const k=(x.host||"?")+" · "+String(x.msg||"").slice(0,120);by[k]=(by[k]||0)+1});
+    const by={};fails.forEach(x=>{const k=(x.host||"?")+" · "+String(x.msg||"").slice(0,120)+(x.url?"\n    "+x.url:"");by[k]=(by[k]||0)+1});
     const lines=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([k,n])=>`- ${k}${n>1?" (×"+n+")":""}`);
     const ver=(window.ARCHIVE_VERSION||"")+"";const txt=`[아카이브 문제 보고] ${ver}\n`+(lines.length?lines.join("\n"):"- 기록된 문제가 없어요");
     if(!lines.length){toast("기록된 문제가 없어요");return}await shareOut(txt)}})();
