@@ -149,7 +149,11 @@ function genericChart(doc,SZ,LB){const isSz=c=>{const n=szNorm(c);return !!n&&(S
         if(body.length>=1){const cols=body.map(r=>szNorm(r[0]));return {cols,rows:head.slice(1).map((l,k)=>[lab(l),...body.map(r=>(r[k+1]||"").replace(/cm|mm/i,"").trim())]).filter(r=>r[0])}}}}}
   return null}
 /* 글로 쓴 사이즈: '-1사이즈 : 허리 37.5cm / 밑위 33.5cm / …', 'S - 어깨 50 / 가슴 60' (줄바꿈이 사이에 끼어도 읽어요) */
-function chartFromLines(txt,SZ,LB){const by={},labels=[],cols=[];const ls=[];
+function chartFromLines(txt,SZ,LB){
+  /* 사이즈가 하나뿐인 소품: '치수: UNISEX FREE (109X3cm)' → FREE · 길이 109 · 폭 3 */
+  {const m=String(txt).match(/(?:치수|크기|사이즈|size)\s*[:：]\s*([^\n(]{0,24}?)\s*\(?\s*(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)(?:\s*[x×X*]\s*(\d+(?:\.\d+)?))?\s*(cm|mm)/i);
+    if(m){const col=szNorm(m[1]||"")||"FREE";const L=["길이","폭","높이"];const v=[m[2],m[3],m[4]].filter(Boolean);return {cols:[/FREE|ONE/.test(col)?"FREE":col],rows:v.map((x,i)=>[L[i]+(m[5].toLowerCase()==="mm"?"(mm)":""),x])}}}
+  const by={},labels=[],cols=[];const ls=[];
   for(const l of String(txt).replace(/\r/g,"").split("\n")){const t=l.replace(/\s+/g," ").trim();if(!t)continue;if(ls.length&&/^[\d.]+\s*(cm|mm)?$/i.test(t))ls[ls.length-1]+=" "+t;else ls.push(t)}
   for(const ln of ls){const m=ln.match(/^[-•·*]?\s*(?:SIZE\s*)?([\w.]{1,6}?)\s*(?:사이즈|SIZE)?\s*[:：]\s*(.+)$/i);if(!m)continue;
     const sz=m[1].toUpperCase();if(!SZ.test(sz))continue;const got={};

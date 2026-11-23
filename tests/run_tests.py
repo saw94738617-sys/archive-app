@@ -125,6 +125,9 @@ def run():
         g3 = "<table><tr><th>cm</th><th>허리</th><th>밑위</th></tr><tr><td>28 인치</td><td>38</td><td>30</td></tr><tr><td>30 인치</td><td>40</td><td>31</td></tr></table>"
         gen = pg.evaluate("(hs=>hs.map(h=>{const c=" + A + ".findChart(new DOMParser().parseFromString(h,'text/html'));return c&&c.cols.join('/')+'|'+c.rows[0].join(':')}))", [g1, g2, g3])
         check("처음 보는 표 모양도 읽기 (괄호 · 사이즈 · 인치 글자)", gen, ["1/2|총장:70:72", "FREE|어깨:52|64".replace("|64", ""), "28/30|허리:38:40"])
+        belt = "<table><tr><th>DETAIL</th><td>-소재: 소가죽<br>-치수: UNISEX FREE (109X3cm)<br>-제조국: 대한민국</td></tr></table>"
+        check("사이즈 하나뿐인 벨트 '치수: FREE (109X3cm)'", pg.evaluate("(h=>{const c=" + A + ".findChart(new DOMParser().parseFromString(h,'text/html'));return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", belt),
+              [["FREE"], ["길이:109", "폭:3"]])
         check("글로 쓴 사이즈표 (비긴202)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", txt),
               [["1", "2"], ["허리:37.5:39.5", "밑위:33.5:34", "허벅지:33:34", "밑단:29:30", "총장:107:108"]])
 

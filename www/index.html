@@ -571,6 +571,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .brcand{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:-2px 0 6px;padding:8px 10px;border-radius:10px;border:1px dashed var(--accent,#d98b55);font-size:12px}.brcand small{color:var(--muted);line-height:1.4}.brcand div{display:flex;gap:6px;flex:none}.brcand button{border:1px solid var(--line,#444);background:none;color:inherit;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:700}.brcand button.ok{background:var(--accent,#d98b55);color:#111;border-color:transparent}
 .needbar{display:flex;gap:8px;align-items:center;width:calc(100% - 32px);margin:12px 16px 0;padding:12px 14px;border-radius:12px;border:1px dashed #d98b55;background:rgba(217,139,85,.08);color:inherit;font-size:13px;text-align:left}.needbar b{color:#d98b55;flex:none}.needbar span{margin-left:auto}
 .linkfix{display:block;margin-top:6px;border:1px dashed #d98b55;background:none;color:#d98b55;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700}
+.priodir-wrap{display:flex;justify-content:flex-end;padding:0 16px 6px}.priodir{border:1px solid var(--line,#3a3f4b);background:none;color:inherit;border-radius:999px;padding:6px 12px;font-size:12px}.priodir b{color:#d98b55}
 .brl{display:flex;gap:6px;align-items:stretch}.brl a{flex:1;min-width:0}.brl-del{flex:none;width:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:14px}
 .brlinks a em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
 .brlinks .nolink{padding:10px 12px;border-radius:10px;border:1.5px dashed #d6cdb8;font-size:12.5px;color:var(--muted)}
@@ -1561,7 +1562,10 @@ function pinHTML(it){
 function prioNum(p){if(typeof p==="number")return p;if(p==="꼭 살 거")return 1;if(p==="고민 중")return 3;const n=parseInt(p,10);return n>=1&&n<=10?n:3}
 function renderPins(){
   const m=$("masonry");m.querySelectorAll(".pin:not(.add)").forEach(p=>p.remove());
-  const ord=ITEMS.map((it,i)=>[it,i]).sort((a,b)=>{const pa=a[0].kind==="wish"?prioNum(a[0].priority):0,pb=b[0].kind==="wish"?prioNum(b[0].priority):0;return pa-pb||a[1]-b[1]}).map(x=>x[0]);
+  let dir=1;try{dir=localStorage.getItem("archive-prio-dir")==="desc"?-1:1}catch(e){}
+  if(!$("prioDir")){m.insertAdjacentHTML("beforebegin",`<div class="priodir-wrap"><button type="button" id="prioDir" class="priodir"></button></div>`);$("prioDir").onclick=()=>{let d="asc";try{d=localStorage.getItem("archive-prio-dir")==="desc"?"asc":"desc";localStorage.setItem("archive-prio-dir",d)}catch(e){}renderPins();toast(d==="desc"?"위시를 낮은 순위부터 보여요":"위시를 1순위부터 보여요")}}
+  $("prioDir").innerHTML=dir===1?"갖고 싶은 순위 · <b>1순위부터</b> ↓":"갖고 싶은 순위 · <b>낮은 순위부터</b> ↑";
+  const ord=ITEMS.map((it,i)=>[it,i]).sort((a,b)=>{const pa=a[0].kind==="wish"?prioNum(a[0].priority):0,pb=b[0].kind==="wish"?prioNum(b[0].priority):0;return (pa-pb)*dir||a[1]-b[1]}).map(x=>x[0]);
   m.insertAdjacentHTML("afterbegin",ord.map(pinHTML).join(""));
   const on=document.querySelector(".drawer .mi.on[data-c]");
   if(on){const c=on.dataset.c,s=on.dataset.s,kd=on.dataset.kind;let n=0;m.querySelectorAll(".pin").forEach(p=>{const show=pinMatch(p,c,s,kd);p.hidden=!show;if(show&&p.dataset.c!=="add")n++});$("catCount").textContent=n+" PINS"}
