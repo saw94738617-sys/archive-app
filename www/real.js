@@ -611,14 +611,17 @@ const normN=t=>String(t||"").toLowerCase().replace(/[^0-9a-z가-힣]+/g," ").tri
 const toks=t=>normN(t).split(" ").filter(w=>w.length>=2);
 function simName(a,b){const A=toks(a),B=new Set(toks(b));if(!A.length)return 0;return A.filter(w=>B.has(w)).length/A.length}
 function shortQuery(name,brand){let n=String(name||"").replace(/\(.*?\)|\[.*?\]/g," ");const bt=new Set(toks(brand));const w=toks(n).filter(x=>!bt.has(x));return w.slice(0,3).join(" ")}
-async function searchShop(origin,q){const enc=encodeURIComponent(q);
+/* 쇼핑몰 검색: 여러 단어로 못 찾는 몰(프로드셔츠 등 카페24 일부)은 핵심 단어 하나로도 한 번 더 찾아 합쳐요 */
+async function searchShop(origin,q){const a=await searchShop0(origin,q);const w=String(q||"").replace(/\[.*?\]|\(.*?\)/g," ").split(/\s+/).filter(x=>x.length>=2&&!/^(셔츠|팬츠|자켓|재킷|코트|니트|바지|티셔츠|shirt|pants|jacket|coat)$/i.test(x));
+  if(w.length<2)return a;const b=await searchShop0(origin,w[0]);const seen=new Set(a.map(x=>x.url));return a.concat(b.filter(x=>!seen.has(x.url)))}
+async function searchShop0(origin,q){const enc=encodeURIComponent(q);
   try{const t=await getText(`${origin}/search/suggest.json?q=${enc}&resources[type]=product&resources[limit]=6`);const j=JSON.parse(t);
     const ps=(((j||{}).resources||{}).results||{}).products||[];if(Array.isArray(ps))return ps.map(p=>({name:p.title,url:absUrl(String(p.url||"").split("?")[0],origin)})).filter(p=>p.url)}catch(e){}
   try{const html=await getText(`${origin}/product/search.html?keyword=${enc}`);const doc=new DOMParser().parseFromString(html,"text/html");const seen=new Set(),out=[];
     doc.querySelectorAll('a[href*="product_no="],a[href*="/product/"]').forEach(a=>{const href=a.getAttribute("href")||"";const m=href.match(/product_no=(\d+)/)||href.match(/\/product\/[^/]+\/(\d+)\//);if(!m||seen.has(m[1]))return;
       const box=a.closest("li")||a.parentElement;let nm=(box&&box.querySelector(".name,.prdName,.item_name,[class*=name]"))?box.querySelector(".name,.prdName,.item_name,[class*=name]").textContent:"";nm=clean(nm.replace(/상품명\s*:/,""))||clean(a.textContent)||((a.querySelector("img")||{}).alt||"");
       if(!nm)return;seen.add(m[1]);out.push({name:nm,url:absUrl(href,origin)})});
-    return out.slice(0,10)}catch(e){}
+    return out.slice(0,24)}catch(e){}
   return []}
 async function findOthers(name,brand,exclUrls,onProg){const origins=shopOrigins(exclUrls).slice(0,15);const q=shortQuery(name,brand)||normN(name);const found=[];let done=0;
   const work=async o=>{try{const list=await searchShop(o,q);let best=null;for(const c of list){const sc=simName(name,c.name);if(sc>=0.5&&(!best||sc>best.score))best={...c,score:sc}}
@@ -1507,7 +1510,7 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   if(!_conf)offEvAdd(o,"이 상품도 있어요: "+clean(best.name||"").slice(0,30));
   $("fLink").value=best.url;await realFetch();
   const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`${OFFW}(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요${_conf?"":" · 브랜드 관리에서 맞는지 확인해 주세요"} · `+cur.replace(/^✓\s*/,"")}
-window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
+window.archiveOfficial={splitBrand,guessOfficial,toOfficial,searchShop,simName};
 
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
 function askOfficial(){const st=$("fetchStatus");

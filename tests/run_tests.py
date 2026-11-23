@@ -30,7 +30,11 @@ LONG = "뒷목 중심 ~ 소매 끝까지의 기장 (레글런 숄더 디테일�
 def tea_block(sz, a, b, c):
     return f'<div class="sz">{sz}</div><table><tr><td>가슴 단면</td><td>{a}</td></tr><tr><td>총장</td><td>{b}</td></tr><tr><td>{LONG}</td><td>{c}</td></tr></table>'
 
+PD_NONE = '<p>검색결과가 없습니다</p><ul><li><a href="/product/mto-레귤러-카라-드레스-셔츠-블루/91/category/67/display/1/"><span class="name">MTO) 레귤러 카라 드레스 셔츠 (블루)</span></a></li></ul>'
+PD_KUBAN = '<ul>' + ''.join(f'<li><a href="/product/x/{n}/category/65/display/1/"><span class="name">{t}</span></a></li>' for n, t in [(292, "쿠반 오픈카라 린넨 셔츠 (그레이)"), (291, "쿠반 오픈카라 린넨 셔츠 (네이비)"), (246, "[Restock] 쿠반 옥스포드 오버 셔츠 (그레이 S.P)")]) + '</ul>'
 PAGES = {
+    "https://pd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("쿠반 오픈카라 린넨", safe=""): PD_NONE,
+    "https://pd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("쿠반", safe=""): PD_KUBAN,
     # 테아트리노: 사이즈마다 표가 따로
     "https://t.test/teatrino": "<html><body><h3>사이즈 정보</h3>" + tea_block(5, 59, 71, 87) + tea_block(6, 61, 73, 89) + "</body></html>",
     # 바버샵: '[ 42 ]' 괄호 사이즈
@@ -105,6 +109,9 @@ def run():
         check("자동으로 찾은 주소는 '후보' → ✓ 눌러야 공식몰", cand, [False, True, True])
         rep = pg.evaluate("""(()=>{openRec();recSellers=[{url:'https://www.musinsa.com/search/goods?keyword=x',shop:'무신사 (검색)',price:'',star:false}];addSeller('https://www.musinsa.com/products/123');return recSellers.map(s=>s.shop+'|'+s.url)})()""")
         check("무신사 (검색) → 진짜 상품 링크로 바꿔 끼우기", rep, ["무신사|https://www.musinsa.com/products/123"])
+        pd = pg.evaluate("""async()=>{const L=await window.archiveOfficial.searchShop('https://pd.test','쿠반 오픈카라 린넨');const nm='[세미오버] 쿠반 오픈카라 린넨 셔츠 (네이비)';
+          let best=null;for(const c of L){const sc=window.archiveOfficial.simName(nm,c.name);if(sc>=0.45&&(!best||sc>best.sc))best={...c,sc}}return best&&best.url}""")
+        check("여러 단어로 못 찾는 몰(프로드셔츠): 핵심 단어로 다시 찾기", pd, "https://pd.test/product/x/291/category/65/display/1/")
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
