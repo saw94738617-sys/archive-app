@@ -143,6 +143,16 @@ function optionStock(doc){const groups=new Map();
     if(!best||ks.size>best.size||(anyOut&&!best.anyOut))best={list,size:ks.size,anyOut}}
   if(!best)return null;const st={};best.list.forEach(x=>{st[x.k]=st[x.k]==="in"?"in":(x.out?"out":"in")});return st}
 /* 카페24 옵션 'BLACK-M' · '블랙/M' → 색상별 재고 */
+/* 페이지 안에 함께 들어 있는 상품 데이터(스크립트 속 옵션 목록)에서 사이즈별 품절 읽기 — 식스샵 등. 페이지 자체에 있는 것만 써요 */
+function scriptStock(html){const st={};let n=0;const SZQ='(XX?S|XX?L|XXXL|[SML]|FREE|F|\\d{2,3}(?:\\.5)?|US ?\\d{1,2}(?:\\.5)?)';
+  const scripts=[...html.matchAll(/<script(?![^>]*\bsrc=)(?![^>]*ld\+json)[^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]).filter(t=>t.length>200);
+  const put=(k,out)=>{k=sizeKey(k);st[k]=st[k]==="in"?"in":(out?"out":"in");n++};
+  const val=(f,v)=>{f=f.toLowerCase();v=String(v).toLowerCase();if(/sold|품절/.test(f))return v==="true"||v==="1"||v==='"y"'||v==='"t"';if(/avail|selling|onsale/.test(f))return v==="false"||v==="0";if(/stock|quantity|qty|inventory/.test(f))return /^-?\d+$/.test(v)&&+v===0;return null};
+  for(const t of scripts){const re1=new RegExp('"(?:name|title|value|optionValue|optionName|label|option_value)"\\s*:\\s*"'+SZQ+'"([^{}\\[\\]]{0,400}?)"(soldOut|isSoldOut|soldout|is_soldout|sold_out|available|isAvailable|selling|stockQuantity|stockCount|stock|quantity|inventoryQuantity|qty)"\\s*:\\s*("?[\\w-]+"?)','gi');
+    let m;while((m=re1.exec(t))){const o=val(m[3],m[4]);if(o!==null)put(m[1],o)}
+    if(n<2){const re2=new RegExp('"(soldOut|isSoldOut|soldout|is_soldout|sold_out|available|isAvailable|stockQuantity|stock|quantity|qty)"\\s*:\\s*("?[\\w-]+"?)([^{}\\[\\]]{0,400}?)"(?:name|title|value|optionValue|optionName|label|option_value)"\\s*:\\s*"'+SZQ+'"','gi');
+      while((m=re2.exec(t))){const o=val(m[1],m[2]);if(o!==null)put(m[4],o)}}}
+  return Object.keys(st).length>=2?st:null}
 function cafe24By(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const j=JSON.parse((new Function("return '"+m[1]+"'"))());const by={};
     Object.values(j).forEach(o=>{const val=clean(String(o.option_value_orginal||o.option_value||o.option_name||""));const parts=val.split(/\s*[-/,]\s*/).map(clean).filter(Boolean);if(parts.length<2)return;
@@ -197,6 +207,8 @@ async function readProduct(url){
   const c24=cafe24Stock(html);if(c24){if(!(P.stock&&Object.keys(P.stock).length>1))P.stock=c24;P.src.push("카페24 재고")}
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock){const os=optionStock(doc);if(os){P.stock=os;P.src.push("옵션 품절 표시")}}
+  if(!P.stock){const ss=scriptStock(html);if(ss){P.stock=ss;P.src.push("페이지 상품 데이터")}}
+  if(!P.stock){try{const i=html.search(/"(?:soldOut|isSoldOut|sold_out|stockQuantity|inventory)"/i);if(i>=0)devLog({k:"info",host:new URL(url).hostname,msg:"재고 데이터 모양: "+html.slice(Math.max(0,i-160),i+160).replace(/\s+/g," ")})}catch(e){}}
   /* 색상별 재고 */
   try{let by=null;
     const ldBy={};offers.forEach(o=>{const c=clean(o.color||"");const nm=o.size||"";if(!c||!nm||!o.availability)return;const k=sizeKey(nm);(ldBy[c]=ldBy[c]||{})[k]=(ldBy[c][k]==="in")?"in":availOf(o.availability)});

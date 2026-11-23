@@ -233,6 +233,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .szimgprev img{width:100%;border-radius:12px;display:block}
 .srow2 a,.srow .sn{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .optcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.optc-b{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1.5px solid var(--line,#d9d2c0);background:transparent;color:inherit;font:inherit;font-size:13px}.optc-b i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(127,127,127,.5)}.optc-b[aria-pressed=true]{border-color:#c8622d;background:rgba(200,98,45,.14);font-weight:700}.optc label small{font-weight:400;opacity:.7;margin-left:6px}
+.pst.sz-all{white-space:normal;line-height:1.45}.pst.sz-all b{text-decoration:underline;text-underline-offset:2px}
 .szro{border-collapse:collapse;width:100%;font-size:13.5px;min-width:max-content}
 .szro th,.szro td{padding:10px 10px;border-bottom:1px solid #eee7d6;text-align:center;font-family:var(--mono)}
 .szro thead th{background:#efe9da;font-size:12.5px}
@@ -1516,7 +1517,9 @@ function pinHTML(it){
   const ph=it.photo?`<div class="ph" style="aspect-ratio:${it.ar||"4/5"}"><img src="${escH(it.photo)}" alt="${escH(it.name)}">${badge}</div>`
     :`<div class="ph bagph">${escH((it.brand||it.name).slice(0,10))}${badge}</div>`;
   const sub=[catLabel(it.c,it.s),it.size,wish?"위시":""].filter(Boolean).map(escH).join(" · ");
-  let stk="";const myN0=myCols(it).names[0];const myN=myN0&&(it.sellers||[]).some(s=>s.stock&&myN0 in s.stock)?myN0:"";if(!myN&&(it.sellers||[]).some(s=>s.stock)){const ins=[...new Set(it.sellers.flatMap(s=>s.stock?Object.keys(s.stock).filter(k=>s.stock[k]==="in"):[]))];stk=ins.length?`<em class="pst in">${escH(ins.slice(0,4).join(" · ")+(ins.length>4?" …":""))} 재고 있음</em>`:`<em class="pst out">전부 품절</em>`}if(myN&&(it.sellers||[]).some(s=>s.stock)){const st=it.sellers.map(s=>s.stock&&s.stock[myN]);stk=st.includes("in")?`<em class="pst in">${escH(myN)} 재고 있음</em>`:st.every(v=>v==="out")?`<em class="pst out">${escH(myN)} 품절</em>`:`<em class="pst unk">${escH(myN)} 확인 필요</em>`}
+  let stk="";{const sl=(it.sellers||[]).filter(s=>s.stock&&Object.keys(s.stock).length);if(sl.length){const my=myCols(it).names[0]||"";const order=[];sl.forEach(s=>Object.keys(s.stock).forEach(k=>{if(!order.includes(k))order.push(k)}));
+    const ins=order.filter(k=>sl.some(s=>s.stock[k]==="in"));
+    stk=ins.length?`<em class="pst in sz-all">재고 ${ins.map(k=>k===my?`<b>${escH(k)}</b>`:escH(k)).join(" · ")}</em>`:`<em class="pst out">전부 품절</em>`}}
   return `<button class="pin" type="button" data-id="${it.id}" data-kind="${it.kind}" data-c="${it.c}" data-s="${it.s||""}">${ph}<div class="tx"><b>${escH((it.brand?it.brand+" ":"")+it.name)}</b><small>${sub}${it.alert&&(it.alert.restock||it.alert.price)?' <i class="alon">알림</i>':""}</small><span>${escH(it.price)}</span>${stk}</div></button>`;
 }
 function prioNum(p){if(typeof p==="number")return p;if(p==="꼭 살 거")return 1;if(p==="고민 중")return 3;const n=parseInt(p,10);return n>=1&&n<=5?n:3}
