@@ -223,4 +223,18 @@ public class ArchiveNotifyPlugin extends Plugin {
             r.put("via", "browser"); call.resolve(r);
         } catch (Exception e) { call.reject("링크를 열지 못했어요"); }
     }
+
+    /** 글 공유 창 열기 (Claude 앱 · 카카오톡 · 메모 등 사용자가 고름) */
+    @PluginMethod
+    public void shareText(PluginCall call) {
+        try {
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("text/plain");
+            i.putExtra(Intent.EXTRA_TEXT, call.getString("text", ""));
+            Intent ch = Intent.createChooser(i, "문제 보내기");
+            ch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(ch);
+            call.resolve();
+        } catch (Exception e) { call.reject("공유 창을 열지 못했어요"); }
+    }
 }
