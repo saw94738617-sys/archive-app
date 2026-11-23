@@ -121,12 +121,13 @@ function findChart(doc){
       const cols=Object.keys(by).filter(k=>Object.keys(by[k]).length);
       if(cols.length>=1&&labels.length&&labels.some(l=>LB.test(l)))return {cols,rows:labels.map(l=>[l,...cols.map(c=>by[c][l]||"")])}}
     /* 가로형: 첫 줄이 사이즈 */
-    const h=rows[0];const cols=h.slice(1).filter(Boolean);
+    const h=rows[0];const cols=h.slice(1).filter(Boolean).map(c=>c.replace(/\s*[\(\[][^)\]]{1,16}[\)\]]\s*/g,"").trim()||c);
     if(cols.length>=1&&!(LB.test(h[0]||"")&&cols.length<2)&&cols.every(c=>SZ.test(c))&&rows.slice(1).some(r=>LB.test(r[0]||""))){
       const body=rows.slice(1).filter(r=>r[0]&&r.slice(1).some(v=>/\d/.test(v))).map(r=>[r[0].replace(/\(cm\)/i,"").trim(),...cols.map((_,i)=>(r[i+1]||"").replace(/cm/i,"").trim())]);
       if(body.length)return {cols:cols.map(c=>c.toUpperCase()),rows:body}}
     /* 세로형: 첫 칸이 사이즈 */
-    const sizesCol=rows.slice(1).map(r=>r[0]);
+    const szc=c=>String(c||"").replace(/\s*[\(\[][^)\]]{1,16}[\)\]]\s*/g,"").trim();
+    const sizesCol=rows.slice(1).map(r=>szc(r[0]));
     if(sizesCol.length&&sizesCol.every(c=>SZ.test(c))&&h.slice(1).some(x=>LB.test(x))){
       const labels=h.slice(1);return {cols:sizesCol.map(c=>c.toUpperCase()),rows:labels.map((l,li)=>[l.replace(/\(cm\)/i,"").trim(),...rows.slice(1).map(r=>(r[li+1]||"").replace(/cm/i,"").trim())])}}
   }return chartFromLines(docText(doc),SZ,LB)}
@@ -1332,7 +1333,7 @@ document.addEventListener("click",async e=>{const b=e.target.closest("#dtChart")
   if(!NATIVE){toast("사이즈표 가져오기는 폰 앱에서 돼요");return}
   const st=$("dtChartSt");b.disabled=true;const say=t=>{if(st){st.hidden=false;st.innerHTML='<span class="spin"></span>'+escH(t)}};
   const why=[];const how=await fillChart(it,say,why);b.disabled=false;
-  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){const o=it.brand&&officialFromBR({ko:it.brand,en:it.brand});
+  if(how){dtSave(it,"✓ 사이즈표를 채웠어요 · "+how)}else if(st){const hasOff=(it.sellers||[]).some(x=>isOfficialSeller(it,x));const o=!hasOff&&it.brand&&officialFromBR({ko:it.brand,en:it.brand});if(hasOff&&!why.length)why.push("공식몰 페이지에서 표를 못 알아봤어요 · 사이즈표 부분을 캡처해서 📷 사진으로 넣어 주세요");
     st.innerHTML=escH("사이즈표를 못 찾았어요 · "+(why.length?why.join(" · "):""))+(o?"<br>"+offPickBtn(o,it.name,it.brand).replace("data-offpick=",`data-pickid="${escH(it.id)}" data-offpick=`):"<br><small>판매처 링크나 사이즈표 사진을 넣어 보세요</small>");
     devLog({k:"fail",host:o?new URL(o).hostname:"",msg:"사이즈표 못 찾음: "+why.join(" / ")})}});
 /* 설정: 사이즈표 없는 옷 한꺼번에 채우기 */

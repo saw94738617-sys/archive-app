@@ -117,6 +117,9 @@ def run():
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
+        vdr = "<table><tr><th>사이즈</th><th>총장</th><th>허리</th><th>허벅지</th><th>밑위</th><th>밑단</th></tr><tr><td>S (30Inch)</td><td>99</td><td>39</td><td>30</td><td>30.5</td><td>20</td></tr><tr><td>M (32Inch)</td><td>100</td><td>41</td><td>31</td><td>31.5</td><td>21</td></tr><tr><td>L (34Inch)</td><td>101</td><td>43</td><td>32</td><td>32.5</td><td>22</td></tr></table>"
+        check("사이즈 칸에 '(30Inch)'가 붙은 표 (비디알)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows[0].join(':')]})", vdr),
+              [["S", "M", "L"], "총장:99:100:101"])
         check("글로 쓴 사이즈표 (비긴202)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", txt),
               [["1", "2"], ["허리:37.5:39.5", "밑위:33.5:34", "허벅지:33:34", "밑단:29:30", "총장:107:108"]])
 
