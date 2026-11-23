@@ -188,7 +188,7 @@ window.archiveStockFor=stockFor;
 /* 브랜드 공식몰 판매처 알아보기: 등록된 공식몰 주소 · 쇼핑몰 이름이 브랜드와 같음 · 주소에 브랜드 영문 이름 */
 function isOfficialSeller(it,s){if(!it||!s||!s.url)return false;if(s.official)return true;const b=brKey(it.brand||"");if(!b)return false;
   let host="";try{host=new URL(s.url).hostname.replace(/^www\.|^m\./,"")}catch(e){return false}
-  try{const o=officialFromBR({ko:it.brand,en:it.brand});if(o&&new URL(o).hostname.replace(/^www\.|^m\./,"")===host)return true}catch(e){}
+  try{const o=officialFromBR({ko:it.brand,en:it.brand},true);if(o&&new URL(o).hostname.replace(/^www\.|^m\./,"")===host)return true}catch(e){}
   if(brKey(s.shop||"")===b)return true;const hb=host.split(".")[0].replace(/[^a-z0-9]/g,"");return b.length>=3&&/^[a-z0-9]+$/.test(b)&&(hb===b||hb===b+"official"||hb==="the"+b)}
 window.archiveIsOfficial=isOfficialSeller;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
@@ -1450,14 +1450,18 @@ function splitBrand(nm){nm=String(nm||"").replace(/\s*-\s*사이즈\s*&\s*후기
   const known=(typeof BR!=="undefined"?BR.brands:[]).flatMap(b=>[b.name,...(b.aka||[])]).filter(Boolean).sort((a,b)=>b.length-a.length);
   for(const k of known)if(nm.toLowerCase().startsWith(k.toLowerCase()+" "))return {ko:k,en:/^[A-Za-z0-9 .&'’\-]+$/.test(k)?k:"",name:clean(nm.slice(k.length))};
   return {ko:"",en:"",name:nm}}
-function officialFromBR(b){if(typeof BR==="undefined")return "";const keys=[b.ko,b.en].filter(Boolean);const x=BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&keys.some(k=>brKey(k)===brKey(n))));
-  if(!x)return "";const l=(x.links||[]).find(l=>/공식/.test(l.label||""))||(x.links||[])[0];return l?originOf(l.url):""}
+function officialFromBR(b,confirmed){if(typeof BR==="undefined")return "";const keys=[b.ko,b.en].filter(Boolean);const x=BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&keys.some(k=>brKey(k)===brKey(n))));
+  if(!x)return "";const ls=(x.links||[]).filter(l=>!confirmed||!l.auto);const l=ls.find(l=>/공식/.test(l.label||""))||ls[0];return l?originOf(l.url):""}
+const OFF_EV={};
 async function guessOfficial(b,strict){if(!b.en)return "";const slug=b.en.toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");if(slug.length<(strict?5:3))return "";
   const cands=[`https://${slug}.co.kr`,`https://www.${slug}.co.kr`,`https://${slug}.com`,`https://www.${slug}.com`,`https://${slug}.kr`,`https://${slug}official.com`,`https://${slug}-official.com`,`https://www.${slug}-official.com`,`https://www.${slug}.co.uk`,`https://${slug}.jp`,`https://www.${slug}.net`];
   /* strict: 캡처에서 주운 영어 조각(예: ack)이면 한글 브랜드 이름까지 사이트에 있어야 인정 */
   const want=(strict&&b.ko?[b.ko]:[b.en,b.ko]).filter(Boolean).map(x=>x.toLowerCase().replace(/\s+/g,""));
-  const one=async u=>{const html=await getText(u+"/");const d=new DOMParser().parseFromString(html,"text/html");const t=(meta(d,"og:site_name","og:title")+" "+(d.title||"")).toLowerCase().replace(/\s+/g,"");
-    if(want.some(w=>t.includes(w)))return u;throw new Error("다른 사이트")};
+  const one=async u=>{const html=await getText(u+"/");const d=new DOMParser().parseFromString(html,"text/html");const nm=clean(meta(d,"og:site_name","og:title")||d.title||"");const t=(meta(d,"og:site_name","og:title")+" "+(d.title||"")).toLowerCase().replace(/\s+/g,"");
+    if(!want.some(w=>t.includes(w)))throw new Error("다른 사이트");
+    /* 물건을 파는 쇼핑몰인지 (장바구니 · 상품 목록 흔적) */
+    if(!/cafe24|shopify|imweb|sixshop|godomall|makeshop|smartstore|장바구니|add[ _-]?to[ _-]?cart|\/cart\b|\/basket|\/product[s]?\/|\/goods\//i.test(html))throw new Error("쇼핑몰 아님");
+    OFF_EV[u]="사이트 이름: "+(nm.slice(0,40)||"?")+" · 쇼핑몰 확인";return u};
   return await Promise.race([Promise.any(cands.map(one)).catch(()=>""),new Promise(r=>setTimeout(()=>r(""),6000))])}
 /* 공식몰을 못 찾았을 때: 화면 안에서 주소를 받아요 (한 번 넣으면 그 브랜드는 다음부터 기억) */
 function askOfficialUrl(b){const st=$("fetchStatus");const nm=b.ko||b.en;
@@ -1471,9 +1475,13 @@ function askOfficialUrl(b){const st=$("fetchStatus");const nm=b.ko||b.en;
       if(t.closest("#offSkip")){fin("");return}
       if(t.closest("#offUrlGo")){const u=($("offUrl").value||"").trim();if(!u){$("offUrl").focus();return}const o=originOf(/^https?:/.test(u)?u:"https://"+u);if(!o){toast("주소를 다시 확인해 주세요");return}fin(o)}};
     document.addEventListener("click",h,true);setTimeout(()=>{const i=$("offUrl");if(i)i.focus()},150)})}
-function rememberOfficial(b,o){if(typeof BR==="undefined"||!o)return;const nm=b.ko||b.en;let x=brFind(BR.brands,nm)||(b.en&&brFind(BR.brands,b.en));
+function rememberOfficial(b,o,auto){if(typeof BR==="undefined"||!o)return;const nm=b.ko||b.en;let x=brFind(BR.brands,nm)||(b.en&&brFind(BR.brands,b.en));
   if(!x){x={id:"b"+Date.now().toString(36),name:nm,sub:"",links:[],shops:[],aka:[]};BR.brands.push(x)}x.aka=x.aka||[];if(b.en&&brKey(b.en)!==brKey(x.name)&&!x.aka.some(a=>brKey(a)===brKey(b.en)))x.aka.push(b.en);
-  x.links=x.links||[];if(!x.links.some(l=>originOf(l.url)===o))x.links.unshift({label:"공식몰",url:o+"/"});saveBR()}
+  x.links=x.links||[];if(!x.links.some(l=>originOf(l.url)===o))x.links.unshift(auto?{label:"공식몰",url:o+"/",auto:true,ev:OFF_EV[o]||""}:{label:"공식몰",url:o+"/"});saveBR();return x}
+/* 후보 근거 더하기: 그 사이트에서 이 상품이 검색되면 */
+function offEvAdd(o,txt){try{for(const x of BR.brands)for(const l of (x.links||[]))if(l.auto&&originOf(l.url)===o&&!(l.ev||"").includes(txt)){l.ev=(l.ev?l.ev+" · ":"")+txt}saveBR()}catch(e){}}
+async function verifyCand(x,o){try{const it=ITEMS.find(i=>brKey(i.brand||"")===brKey(x.name)||(x.aka||[]).some(a=>brKey(a)===brKey(i.brand||"")));if(!it||!it.name)return;
+  const q=shortQuery(it.name,it.brand)||it.name;for(const c of await searchShop(o,q)){if(Math.max(simName(it.name,c.name),simName(q,c.name))>=0.45){offEvAdd(o,"이 상품도 있어요: "+clean(c.name).slice(0,30));return}}}catch(e){}}
 async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=preset||splitBrand(nm);
   if(b.ko&&!$("fBrand").value)$("fBrand").value=b.ko;
   if(b.name&&b.name!==nm&&$("fName").value===nm)$("fName").value=b.name;
@@ -1482,9 +1490,9 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   let o=officialFromBR(b);if(!o)o=await guessOfficial(b);
   for(const en of (b.ens||[])){if(o)break;if(!en||brKey(en)===brKey(b.en||""))continue;o=officialFromBR({en})||await guessOfficial({en,ko:b.ko},true)}
   if(o&&noFetch(o)){st.textContent=`${b.ko||b.en} 공식몰도 약관상 앱이 읽을 수 없어요 · 상품 화면을 캡처해서 공유하면 이름 · 가격 · 사진을 넣어요`;return}
-  if(!o)o=await askOfficialUrl(b);
+  let typed=false;if(!o){o=await askOfficialUrl(b);typed=!!o}
   if(!o||noFetch(o)){st.textContent=`링크와 이름만 넣었어요 · ${b.ko||b.en} 공식몰을 못 찾았어요 · 사진은 캡처해서 추가해 주세요`;return}
-  rememberOfficial(b,o);
+  const _fromBR=officialFromBR(b)===o;const _conf=typed||officialFromBR(b,true)===o;if(!_fromBR||typed)rememberOfficial(b,o,!typed);const OFFW=_conf?"공식몰":"공식몰 후보";
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 약관 확인 중…`;let t=shopStore().terms[o];if(!t){try{t=await checkTerms(o)}catch(e){}}
   if(t&&t.result==="ban"){st.textContent=`${b.ko||b.en} 공식몰은 약관에서 자동 수집을 금지해서 가져오지 않았어요 · 링크와 이름만 저장했어요`;return}
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰에서 같은 상품 찾는 중…`;
@@ -1494,8 +1502,9 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   if(!best){devLog({k:"fail",host:new URL(o).hostname,msg:"공식몰 검색: "+tried.join(" / ")});
     st.innerHTML=`${escH(b.ko||b.en)} 공식몰 검색에서 같은 상품을 못 찾았어요.<br><button type="button" class="altgo" id="offSearchWeb" style="margin-top:6px">🔎 공식몰에서 직접 찾기</button><br><small>찾은 상품 페이지 주소를 복사해 위 링크 칸에 붙여넣고 '가져오기'를 누르면 공식몰 사진 · 재고 · 사이즈표를 가져와요</small>`;
     const bt=$("offSearchWeb");if(bt)bt.onclick=()=>window.open(o+"/product/search.html?keyword="+encodeURIComponent(qs[0]),"_blank","noopener");return}
+  if(!_conf)offEvAdd(o,"이 상품도 있어요: "+clean(best.name||"").slice(0,30));
   $("fLink").value=best.url;await realFetch();
-  const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`공식몰(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요 · `+cur.replace(/^✓\s*/,"")}
+  const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`${OFFW}(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요${_conf?"":" · 브랜드 관리에서 맞는지 확인해 주세요"} · `+cur.replace(/^✓\s*/,"")}
 window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
 
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
@@ -1538,11 +1547,25 @@ if(typeof renderBR==="function"){const _rb=renderBR;renderBR=function(){const r=
     const none=BR.brands.filter(x=>!(x.links||[]).length);
     document.querySelectorAll("#brBody .brcard").forEach(c=>{const x=BR.brands.find(b=>b.id===c.dataset.id);if(!x||(x.links||[]).length)return;const nl=c.querySelector(".nolink");
       if(nl&&!c.querySelector("[data-brfind]"))nl.insertAdjacentHTML("afterend",`<div class="brfind"><button type="button" class="altgo" data-brfind>🔎 공식몰 자동 찾기</button><button type="button" class="altshop" data-brweb>🌐 웹에서 찾기</button></div>`)});
+    document.querySelectorAll("#brBody .brcard").forEach(c=>{const x=BR.brands.find(b=>b.id===c.dataset.id);if(!x)return;const rows=c.querySelectorAll(".brl");
+      (x.links||[]).forEach((l,li)=>{if(!l.auto||!rows[li])return;const sp=rows[li].querySelector("a span");if(sp)sp.textContent="공식몰 후보 ↗";rows[li].classList.add("cand");
+        rows[li].insertAdjacentHTML("afterend",`<div class="brcand"><small>앱이 자동으로 찾은 주소예요${l.ev?" · "+escH(l.ev):""}</small><div><button type="button" class="ok" data-brlok="${li}">✓ 맞아요</button><button type="button" data-brldel="${li}">✕ 아니에요</button></div></div>`)})});
     const tabs=document.querySelector("#brBody .brtabs");if(tabs&&none.length>1&&!$("brFindAll"))tabs.insertAdjacentHTML("afterend",`<button type="button" class="altgo" id="brFindAll" style="margin:8px 0 4px">🔎 링크 없는 브랜드 ${none.length}개 공식몰 한 번에 찾기</button>`)}catch(e){}return r};window.renderBR=renderBR}
+/* 홈 '확인 필요' 한 줄: 확인 안 한 공식몰 후보 · 공식몰 없는 브랜드(내 옷이 있는 것만) */
+function renderNeed(){try{const home=$("home");if(!home||typeof BR==="undefined")return;let el=$("needBar");
+  const cand=BR.brands.filter(x=>(x.links||[]).some(l=>l.auto)).length;
+  const used=new Set(ITEMS.map(i=>brKey(i.brand||"")).filter(Boolean));
+  const none=BR.brands.filter(x=>!(x.links||[]).length&&[x.name,...(x.aka||[])].some(n=>used.has(brKey(n||"")))).length;
+  if(!cand&&!none){if(el)el.remove();return}
+  if(!el){el=document.createElement("button");el.type="button";el.id="needBar";el.className="needbar";const hero=home.querySelector(".hero");if(hero)hero.after(el);else home.prepend(el);el.onclick=()=>{BR.tab="brand";openBR()}}
+  el.innerHTML=`<b>확인 필요</b> ${[cand?`공식몰 후보 ${cand}곳 맞는지 확인`:"",none?`공식몰 없는 브랜드 ${none}곳`:""].filter(Boolean).join(" · ")} <span>›</span>`}catch(e){}}
+window.renderNeed=renderNeed;setTimeout(renderNeed,1500);
+if(typeof saveBR==="function"){const _sb=saveBR;saveBR=function(){const r=_sb.apply(this,arguments);renderNeed();return r};window.saveBR=saveBR}
 function brEn(x){const all=[x.name,...(x.aka||[])].filter(Boolean);return all.find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n))||""}
-async function findBrandOfficial(x){const en=brEn(x);if(!en)return "";const o=await guessOfficial({en,ko:x.name});if(o&&!noFetch(o)){rememberOfficial({ko:x.name,en},o);return o}return ""}
+async function findBrandOfficial(x){const en=brEn(x);if(!en)return "";const o=await guessOfficial({en,ko:x.name});if(o&&!noFetch(o)){const y=rememberOfficial({ko:x.name,en},o,true);if(y)await verifyCand(y,o);return o}return ""}
 document.addEventListener("click",async e=>{
-  const dl=e.target.closest("[data-brldel]");if(dl){const c=dl.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(!x)return;const l=(x.links||[])[+dl.dataset.brldel];if(!l)return;x.links.splice(+dl.dataset.brldel,1);saveBR();renderBR();toast(`${x.name} 링크를 뺐어요 · ${l.url.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,"")}`);return}
+  const ok=e.target.closest("[data-brlok]");if(ok){const c=ok.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);const l=x&&(x.links||[])[+ok.dataset.brlok];if(!l)return;delete l.auto;delete l.ev;saveBR();renderBR();renderNeed();toast(`${x.name} 공식몰로 확정했어요`);return}
+  const dl=e.target.closest("[data-brldel]");if(dl){const c=dl.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(!x)return;const l=(x.links||[])[+dl.dataset.brldel];if(!l)return;x.links.splice(+dl.dataset.brldel,1);saveBR();renderBR();renderNeed();toast(`${x.name} 링크를 뺐어요 · ${l.url.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,"")}`);return}
   const w=e.target.closest("[data-brweb]");if(w){const c=w.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(x)window.open("https://www.google.com/search?q="+encodeURIComponent(x.name+" 공식몰 official"),"_blank","noopener");return}
   const f=e.target.closest("[data-brfind]");if(f){if(!NATIVE){toast("공식몰 찾기는 폰 앱에서 돼요");return}const c=f.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(!x)return;
     if(!brEn(x)){toast(`${x.name}의 영어 이름을 몰라서 못 찾아요 · '웹에서 찾기'로 주소를 넣어 주세요`);return}
