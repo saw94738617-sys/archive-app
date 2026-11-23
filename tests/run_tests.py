@@ -52,6 +52,8 @@ PAGES = {
         {"option1": "Olive", "option2": "30", "available": False}, {"option1": "Olive", "option2": "32", "available": True}]}),
     # 카페24 색상-사이즈 옵션
     "https://t.test/cafe24": '''<html><head><meta property="og:title" content="WORK JACKET"><meta property="product:price:amount" content="289000"></head><body><script>var option_stock_data = '{\\"P1\\":{\\"option_value_orginal\\":\\"BLACK-M\\",\\"stock_number\\":0,\\"use_stock\\":true,\\"is_selling\\":\\"T\\"},\\"P2\\":{\\"option_value_orginal\\":\\"BLACK-L\\",\\"stock_number\\":2,\\"use_stock\\":true,\\"is_selling\\":\\"T\\"},\\"P3\\":{\\"option_value_orginal\\":\\"NAVY-M\\",\\"stock_number\\":3,\\"use_stock\\":true,\\"is_selling\\":\\"T\\"},\\"P4\\":{\\"option_value_orginal\\":\\"NAVY-L\\",\\"stock_number\\":0,\\"use_stock\\":true,\\"is_selling\\":\\"T\\"}}';</script></body></html>''',
+    # 리노스토어: 카페24 옵션에 안내 문구가 섞임
+    "https://t.test/rino": "<html><body><script>var option_stock_data = '" + json.dumps({"P1": {"option_value_orginal": "8-가죽제품 교환/환불 불가", "stock_number": 2, "use_stock": True, "is_selling": "T"}, "P2": {"option_value_orginal": "8 1/2-가죽제품 교환/환불 불가", "stock_number": 0, "use_stock": True, "is_selling": "T"}}, ensure_ascii=False).replace('"', '\\"') + "';</script></body></html>",
     # 코릴라: 주문 제작 문구
     "https://t.test/korilla": '<html><head><meta property="og:title" content="N1_0.1 CXL (Black)"></head><body><p>모든 제품은 주문과 동시에 제작이 되며 현재 주문시 약 18주정도 소요됩니다</p></body></html>',
     # 페이지 안 상품 데이터
@@ -80,7 +82,8 @@ def run():
 
         print("재고")
         check("식스샵: (품절) 글자, 표 안 S·M 제외", rd("https://t.test/sixshop", "P.stock"), {"S": "out", "M": "in", "L": "in", "XL": "out"})
-        check("제라도: US 8 1/2 (26.5cm), 환불 불가 제외", rd("https://t.test/products/vaudeville", "P.stock"), {"8": "in", "8.5": "out", "9": "in"})
+        check("제라도: US 8 1/2 (26.5cm) → 265mm, 환불 불가 제외", rd("https://t.test/products/vaudeville", "P.stock"), {"260": "in", "265": "out", "270": "in"})
+        check("리노스토어: 카페24 옵션 안내 문구 빼기", [rd("https://t.test/rino", "P.stock"), rd("https://t.test/rino", "P.stockBy||null")], [{"8": "in", "8.5": "out"}, None])
         check("쇼피파이 색상별", rd("https://t.test/products/chino", "P.stockBy"), {"Khaki": {"30": "in", "32": "out"}, "Olive": {"30": "out", "32": "in"}})
         check("카페24 색상별", rd("https://t.test/cafe24", "P.stockBy"), {"BLACK": {"M": "out", "L": "in"}, "NAVY": {"M": "in", "L": "out"}})
         check("색상 골라 재고 보기", rd("https://t.test/cafe24", "archiveStockFor(P,'navy')"), {"M": "in", "L": "out"})
@@ -93,7 +96,7 @@ def run():
               ["발 길이(mm):250/260", "JP(cm):25/26", "US:7/8", "UK:6/7", "EU:40/41"])
         check("리노스토어 대응표 'US 8 : 260'", pg.evaluate(f"(()=>{{const P={A}.sizePairsFrom('SIZE(cm) 8 : 260 8 1/2 : 265');return {A}.shoeChart(['8','8.5'],true,P).cols}})()"), ["260", "265"])
         check("옷 사이즈를 신발로 착각 안 함", pg.evaluate(f"{A}.shoeChart(['36','38','40'],false)"), None)
-        check("반 사이즈 구분", pg.evaluate(f"['US 8 1/2 (26.5cm)','M','Medium (42)'].map({A}.sizeKey)"), ["8.5", "M", "42"])
+        check("반 사이즈 · cm 표기", pg.evaluate(f"['US 8 1/2','US 8 1/2 (26.5cm)','US 6(24CM)','M','Medium (42)'].map({A}.sizeKey)"), ["8.5", "265", "240", "M", "42"])
 
         print("앱 알아보기 · 접속 안 함")
         check("캡처한 앱 알아보기", pg.evaluate("['나의 할인가 197,210원','즉시 구매가','ZARA 코트','에이블리','올리브영 오늘드림','가격 14,910원'].map(t=>window.archiveShot.detect(t))"),
@@ -105,7 +108,9 @@ def run():
         print("목록 카드")
         check("재고 있는 사이즈 전부 보여주기", pg.evaluate("""()=>{ITEMS.push({id:'c1',kind:'wish',c:'top',name:'S',sellers:[{url:'https://x/1',shop:'x',stock:{S:'out',M:'in',L:'in'}}]},
             {id:'c2',kind:'wish',c:'shoes',name:'B',sellers:[{url:'https://x/2',shop:'x',mto:true}]});renderPins();
-            return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["재고 M · L", "주문 제작"])
+            return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["재고 M · L", "✂ 주문 제작 가능"])
+        check("공식몰 재고 우선", pg.evaluate("""()=>{ITEMS.length=0;ITEMS.push({id:'j1',kind:'wish',c:'shoes',brand:'JELADO',name:'V',sellers:[{url:'https://jelado.com/p',shop:'JELADO',stock:{'270':'in','275':'out'}},{url:'https://rino.test/p',shop:'rino',stock:{'280':'in'}}]});renderPins();
+            return [...document.querySelectorAll('.pst')].map(e=>e.textContent)}"""), ["재고 270"])
         pg.close()
 
         # ---- 2) 캡처 읽기 (폰 글자 읽기를 흉내) ----

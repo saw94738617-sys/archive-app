@@ -152,6 +152,8 @@ public class AlertWorker extends Worker {
     static final Pattern SZ = Pattern.compile("(?:^|[\\s/·\\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\\d{2,3}(?:\\.\\d)?|\\d{1,2}(?:\\.5)?))(?=$|[\\s/·\\-_)])");
     static String sizeKey(String s) {
         s = s == null ? "" : s.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT).replaceAll("(\\d{1,2})\\s*1/2", "$1.5");
+        Matcher cmm = Pattern.compile("\\((\\d{2}(?:\\.\\d)?)\\s*CM\\)").matcher(s);
+        if (cmm.find()) return String.valueOf(Math.round(Double.parseDouble(cmm.group(1)) * 10));
         Matcher m = SZ.matcher(s); return m.find() ? m.group(1) : s;
     }
     static String avail(String v) {
@@ -220,7 +222,14 @@ public class AlertWorker extends Worker {
                     Object ovo = o.opt("option_value_orginal");
                     String val = ovo instanceof JSONArray ? ((JSONArray) ovo).optString(0, "") : o.optString("option_value", o.optString("option_name", ""));
                     if (val.isEmpty()) continue;
-                    String[] parts = val.split("\\s*[-/,]\\s*"); String k = sizeKey(parts[parts.length - 1]);
+                    String vv = val.replaceAll("(\\d{1,2})\\s*1/2", "$1.5");
+                    java.util.List<String> parts0 = new java.util.ArrayList<>();
+                    for (String x : vv.split("\\s*[-/,]\\s*")) { x = x.trim(); if (!x.isEmpty() && !x.matches("(?i).*(환불|교환|불가|가죽\\s*제품|안내|주의|notice|refund|final\\s*sale|품절).*")) parts0.add(x); }
+                    if (parts0.isEmpty()) continue;
+                    int si = -1; for (int pi = 0; pi < parts0.size(); pi++) if (parts0.get(pi).matches("(?i)(XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\\d{2,3}(\\.5)?|\\d{1,2}(\\.5)?|US ?\\d{1,2}(\\.5)?)|.*\\(\\d{2}(\\.\\d)?\\s*cm\\).*")) { si = pi; break; }
+                    if (si < 0) si = parts0.size() - 1;
+                    String[] parts = new String[parts0.size()]; { int q = 0; for (int pi = 0; pi < parts0.size(); pi++) if (pi != si) parts[q++] = parts0.get(pi); parts[parts.length - 1] = parts0.get(si); }
+                    String k = sizeKey(parts[parts.length - 1]);
                     if (parts.length > 1) { StringBuilder col = new StringBuilder(); for (int pi = 0; pi < parts.length - 1; pi++) col.append(pi > 0 ? " " : "").append(parts[pi].trim()); if (!colorOk(color, col.toString())) continue; }
                     boolean selling = !"F".equals(o.optString("is_selling", "T")) && !"F".equals(o.optString("is_display", "T"));
                     Object us = o.opt("use_stock"); boolean useSt = Boolean.TRUE.equals(us) || "T".equals(String.valueOf(us));

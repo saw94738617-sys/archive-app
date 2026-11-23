@@ -95,7 +95,7 @@ async function imageAsDataURL(url,max){const b=await getImageBlob(url);let s=b;t
 const absUrl=(u,base)=>{try{return new URL(u,base).href}catch(e){return ""}};
 const clean=s=>String(s||"").replace(/\s+/g," ").trim();
 const CUR={KRW:"₩",JPY:"¥",USD:"$",EUR:"€",GBP:"£"};
-function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
+function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");{const cm=s.match(/\((\d{2}(?:\.\d)?)\s*CM\)/);if(cm)return String(Math.round(+cm[1]*10))}const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
 function availOf(v){v=String(v||"").toLowerCase();if(/instock|in_stock|limitedavailability|presale|preorder/.test(v))return "in";if(/outofstock|out_of_stock|soldout|discontinued/.test(v))return "out";return "unk"}
 
 function parseLD(doc){const out=[];doc.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{const j=JSON.parse(s.textContent.trim());const walk=x=>{if(!x)return;if(Array.isArray(x))return x.forEach(walk);if(typeof x!=="object")return;if(x["@graph"])walk(x["@graph"]);const t=x["@type"];if(t==="Product"||(Array.isArray(t)&&t.includes("Product"))||t==="ProductGroup")out.push(x);if(x.hasVariant)walk(x.hasVariant)};walk(j)}catch(e){}});return out}
@@ -153,10 +153,16 @@ function scriptStock(html){const st={};let n=0;const SZQ='(XX?S|XX?L|XXXL|[SML]|
     if(n<2){const re2=new RegExp('"(soldOut|isSoldOut|soldout|is_soldout|sold_out|available|isAvailable|stockQuantity|stock|quantity|qty)"\\s*:\\s*("?[\\w-]+"?)([^{}\\[\\]]{0,400}?)"(?:name|title|value|optionValue|optionName|label|option_value)"\\s*:\\s*"'+SZQ+'"','gi');
       while((m=re2.exec(t))){const o=val(m[1],m[2]);if(o!==null)put(m[4],o)}}}
   return Object.keys(st).length>=2?st:null}
+/* 카페24 옵션 값 나누기: '8 1/2-가죽제품 교환/환불 불가' → 사이즈 8.5, 안내 문구는 빼요 */
+const OPT_NOTE=/환불|교환|불가|가죽\s*제품|안내|주의|notice|refund|final\s*sale|품절/i;
+const OPT_SZ=/^(XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(\.5)?|\d{1,2}(\.5)?|US ?\d{1,2}(\.5)?)$|\(\d{2}(\.\d)?\s*cm\)/i;
+function splitOpt(val){const v=clean(String(val||"")).replace(/(\d{1,2})\s*1\/2/g,"$1.5");const parts=v.split(/\s*[-/,]\s*/).map(clean).filter(Boolean).filter(x=>!OPT_NOTE.test(x));
+  if(!parts.length)return null;let si=parts.findIndex(x=>OPT_SZ.test(x));if(si<0)si=parts.length-1;
+  return {size:sizeKey(parts[si]),color:parts.filter((_,i)=>i!==si).join(" ")}}
 function cafe24By(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const j=JSON.parse((new Function("return '"+m[1]+"'"))());const by={};
-    Object.values(j).forEach(o=>{const val=clean(String(o.option_value_orginal||o.option_value||o.option_name||""));const parts=val.split(/\s*[-/,]\s*/).map(clean).filter(Boolean);if(parts.length<2)return;
-      const k=sizeKey(parts[parts.length-1]);const col=parts.slice(0,-1).join(" ");
+    Object.values(j).forEach(o=>{const sp=splitOpt(o.option_value_orginal||o.option_value||o.option_name||"");if(!sp||!sp.color)return;
+      const k=sp.size;const col=sp.color;
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
       const noAuto=o.is_auto_soldout==="F"||o.use_soldout==="F";const unknownN=o.stock_number==null||o.stock_number==="";
       const v=!selling?"out":(!useSt||noAuto||unknownN)?"in":(n>0?"in":"out");(by[col]=by[col]||{})[k]=by[col][k]==="in"?"in":v});
@@ -168,9 +174,15 @@ function optionColors(doc){for(const sel of doc.querySelectorAll("select")){cons
 const colorN=c=>clean(c).toUpperCase().replace(/\s+/g," ");
 function colorKeyIn(by,color){if(!by||!color)return null;const w=colorN(color);const ks=Object.keys(by);return ks.find(k=>colorN(k)===w)||ks.find(k=>colorN(k).includes(w)||w.includes(colorN(k)))||null}
 function stockFor(x,color){const k=colorKeyIn(x&&x.stockBy,color);return k?x.stockBy[k]:(x?x.stock:null)}
-window.archiveStockFor=stockFor;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
+window.archiveStockFor=stockFor;
+/* 브랜드 공식몰 판매처 알아보기: 등록된 공식몰 주소 · 쇼핑몰 이름이 브랜드와 같음 · 주소에 브랜드 영문 이름 */
+function isOfficialSeller(it,s){if(!it||!s||!s.url)return false;if(s.official)return true;const b=brKey(it.brand||"");if(!b)return false;
+  let host="";try{host=new URL(s.url).hostname.replace(/^www\.|^m\./,"")}catch(e){return false}
+  try{const o=officialFromBR({ko:it.brand,en:it.brand});if(o&&new URL(o).hostname.replace(/^www\.|^m\./,"")===host)return true}catch(e){}
+  if(brKey(s.shop||"")===b)return true;const hb=host.split(".")[0].replace(/[^a-z0-9]/g,"");return b.length>=3&&/^[a-z0-9]+$/.test(b)&&(hb===b||hb===b+"official"||hb==="the"+b)}
+window.archiveIsOfficial=isOfficialSeller;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
-  try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const val=clean(o.option_value_orginal||o.option_value||o.option_name||"");if(!val)return;const parts=val.split(/[-/,]/).map(clean);const k=sizeKey(parts[parts.length-1]);
+  try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const sp=splitOpt(o.option_value_orginal||o.option_value||o.option_name||"");if(!sp)return;const k=sp.size;
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
       const noAuto=o.is_auto_soldout==="F"||o.use_soldout==="F";const unknownN=o.stock_number==null||o.stock_number==="";
       const v=!selling?"out":(!useSt||noAuto||unknownN)?"in":(n>0?"in":"out");st[k]=st[k]==="in"?"in":v});
@@ -306,7 +318,7 @@ async function refreshItem(it,quiet){
 document.addEventListener("click",async e=>{
   if(!NATIVE)return;
   if(e.target.closest("#stRefresh")){e.stopImmediatePropagation();e.preventDefault();const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
-    const b=e.target.closest("#stRefresh");b.disabled=true;b.textContent="확인 중…";await refreshItem(it);openDetail(it.id);persistAll();return}
+    const b=e.target.closest("#stRefresh");b.disabled=true;b.textContent="확인 중…";await refreshItem(it);openDetail(it.id);persistAll();if(typeof renderPins==="function")renderPins();return}
 },true);
 
 /* 앱 열 때: 알림 켠 위시 확인 */
@@ -1478,17 +1490,17 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
 /* 갖고 싶은 순위: 기본 1~3순위, ＋로 칸을 늘려요 (최대 10) */
 function prioMaxSet(){return Math.min(10,Math.max(3,+(localStorage.getItem("archive-prio-max")||3)))}
 function prioMax(){let m=prioMaxSet();ITEMS.forEach(x=>{if(x.kind==="wish"){const n=prioNum(x.priority);if(n>m)m=n}});return Math.min(10,m)}
-function prioList(sel){const m=Math.max(prioMax(),sel||0);return Array.from({length:m},(_,i)=>i+1)}
+function prioList(sel){const m=Math.max(prioMaxSet(),sel||0);return Array.from({length:m},(_,i)=>i+1)}
 function setPrioMax(n){localStorage.setItem("archive-prio-max",String(Math.min(10,Math.max(3,n))))}
-function renderFormPrio(sel){const box=$("fPrio");if(!box)return;const cur=sel||+((box.querySelector("[aria-pressed=true]")||{dataset:{p:0}}).dataset.p)||Math.min(3,prioMax());
+function renderFormPrio(sel){const box=$("fPrio");if(!box)return;const cur=sel||+((box.querySelector("[aria-pressed=true]")||{dataset:{p:0}}).dataset.p)||3;
   box.innerHTML=prioList(cur).map(n=>`<button type="button" data-p="${n}" aria-pressed="${n===cur}">${n}</button>`).join("")+`<button type="button" data-p-add aria-label="순위 칸 더하기">＋</button>`+(prioMaxSet()>3?`<button type="button" data-p-del aria-label="순위 칸 줄이기">−</button>`:"")}
 document.addEventListener("click",e=>{const b=e.target.closest("#fPrio [data-p-add],#fPrio [data-p-del]");if(b){e.stopImmediatePropagation();const sel=+((document.querySelector("#fPrio [data-p][aria-pressed=true]")||{dataset:{p:0}}).dataset.p);
     if(b.hasAttribute("data-p-add")){if(prioMaxSet()>=10){toast("순위는 10순위까지 만들 수 있어요");return}setPrioMax(prioMaxSet()+1)}else{const m=prioMaxSet();if(ITEMS.some(x=>x.kind==="wish"&&prioNum(x.priority)===m)){toast(`${m}순위인 옷이 있어서 줄일 수 없어요`);return}setPrioMax(m-1)}
-    renderFormPrio(Math.min(sel,prioMax())||0);return}
+    renderFormPrio(Math.min(sel,prioMaxSet())||0);return}
   const d=e.target.closest("[data-pp-add],[data-pp-del]");if(!d)return;e.stopImmediatePropagation();const it=ITEMS.find(x=>x.id===dtId);
   if(d.hasAttribute("data-pp-add")){if(prioMaxSet()>=10){toast("순위는 10순위까지 만들 수 있어요");return}setPrioMax(prioMaxSet()+1);if(it)dtSave(it,`${prioMaxSet()}순위 칸을 만들었어요`)}
   else{const m=prioMaxSet();if(ITEMS.some(x=>x.kind==="wish"&&prioNum(x.priority)===m)){toast(`${m}순위인 옷이 있어서 줄일 수 없어요`);return}setPrioMax(m-1);if(it)dtSave(it,"순위 칸을 줄였어요")}},true);
-if(typeof openRec==="function"){const _or2=openRec;openRec=function(){const r=_or2.apply(this,arguments);renderFormPrio(Math.min(3,prioMax()));return r};window.openRec=openRec}
+if(typeof openRec==="function"){const _or2=openRec;openRec=function(){const r=_or2.apply(this,arguments);renderFormPrio(3);return r};window.openRec=openRec}
 document.addEventListener("click",e=>{if(!e.target.closest("#dtEdit"))return;const id=dtId;setTimeout(()=>{const it=ITEMS.find(x=>x.id===id);if(it&&it.kind==="wish")renderFormPrio(prioNum(it.priority))},0)});
 setTimeout(()=>renderFormPrio(3),0);
 /* 목록 제목(위시리스트 등)이 줄바꿈되지 않게 칸에 맞춰 글자 크기를 줄여요 */

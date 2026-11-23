@@ -237,6 +237,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .mto-b{font-style:normal;font-weight:700;color:#c8622d;margin-right:4px}.mto-x{border:1px solid currentColor;background:transparent;color:inherit;opacity:.75;border-radius:999px;padding:2px 9px;font:inherit;font-size:11.5px;margin-left:4px}
 .szimgprev,.szimg-wrap{position:relative}.szimg-del{position:absolute;top:14px;right:8px;border:0;border-radius:999px;padding:6px 12px;background:rgba(20,22,30,.82);color:#fff;font:inherit;font-size:12.5px;font-weight:700}
 .srcbox{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:#1f2a44}.srcbox select{flex:1;max-width:60%;padding:6px 8px;border-radius:8px;border:1.5px solid #b9b09a;background:#fff;color:#1f2a44;font:inherit}
+.pst.mto{color:#c8622d;font-weight:800}.pst.mto.out{color:#8a8578}.badge.mtob{top:auto;bottom:10px;left:10px;background:#1f2a44;color:#f3efe4}.offb{font-style:normal;font-size:11px;font-weight:800;color:#c8622d;border:1px solid #c8622d;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:2px}
 .szro{border-collapse:collapse;width:100%;font-size:13.5px;min-width:max-content}
 .szro th,.szro td{padding:10px 10px;border-bottom:1px solid #eee7d6;text-align:center;font-family:var(--mono)}
 .szro thead th{background:#efe9da;font-size:12.5px}
@@ -1517,11 +1518,11 @@ function myCols(it){
 function mineIdx(cols,c,unit){return myCols({c,chart:{cols,rows:[],unit}}).names.map(n=>cols.indexOf(n))}
 function pinHTML(it){
   const wish=it.kind==="wish";
-  const badge=wish?`<div class="badge">WISH · ${prioNum(it.priority)}순위</div>`:"";
+  const _mto=(it.sellers||[]).length&&(it.sellers||[]).some(s=>s.mto)&&(it.sellers||[]).every(s=>s.mto||!(s.stock&&Object.keys(s.stock).length));const badge=(wish?`<div class="badge">WISH · ${prioNum(it.priority)}순위</div>`:"")+(_mto?`<div class="badge mtob">주문 제작</div>`:"");
   const ph=it.photo?`<div class="ph" style="aspect-ratio:${it.ar||"4/5"}"><img src="${escH(it.photo)}" alt="${escH(it.name)}">${badge}</div>`
     :`<div class="ph bagph">${escH((it.brand||it.name).slice(0,10))}${badge}</div>`;
   const sub=[catLabel(it.c,it.s),it.size,wish?"위시":""].filter(Boolean).map(escH).join(" · ");
-  let stk="";if((it.sellers||[]).length&&(it.sellers||[]).every(s=>s.mto||!(s.stock&&Object.keys(s.stock).length))&&(it.sellers||[]).some(s=>s.mto)){const cl=it.sellers.filter(s=>s.mto).every(s=>s.closed);stk=`<em class="pst ${cl?"out":"in"}">${cl?"주문 마감":"주문 제작"}</em>`}else{const sl=(it.sellers||[]).filter(s=>s.stock&&Object.keys(s.stock).length);if(sl.length){const my=myCols(it).names[0]||"";const order=[];sl.forEach(s=>Object.keys(s.stock).forEach(k=>{if(!order.includes(k))order.push(k)}));
+  let stk="";const _off=(it.sellers||[]).filter(s=>window.archiveIsOfficial&&window.archiveIsOfficial(it,s));const _src=_off.some(s=>s.mto||(s.stock&&Object.keys(s.stock).length))?_off:(it.sellers||[]);if(_src.length&&_src.every(s=>s.mto||!(s.stock&&Object.keys(s.stock).length))&&_src.some(s=>s.mto)){const cl=_src.filter(s=>s.mto).every(s=>s.closed);stk=`<em class="pst mto ${cl?"out":""}">${cl?"주문 마감":"✂ 주문 제작 가능"}</em>`}else{const sl=_src.filter(s=>s.stock&&Object.keys(s.stock).length);if(sl.length){const my=myCols(it).names[0]||"";const order=[];sl.forEach(s=>Object.keys(s.stock).forEach(k=>{if(!order.includes(k))order.push(k)}));
     const ins=order.filter(k=>sl.some(s=>s.stock[k]==="in"));
     stk=ins.length?`<em class="pst in sz-all">재고 ${ins.map(k=>k===my?`<b>${escH(k)}</b>`:escH(k)).join(" · ")}</em>`:`<em class="pst out">전부 품절</em>`}}
   return `<button class="pin" type="button" data-id="${it.id}" data-kind="${it.kind}" data-c="${it.c}" data-s="${it.s||""}">${ph}<div class="tx"><b>${escH((it.brand?it.brand+" ":"")+it.name)}</b><small>${sub}${it.alert&&(it.alert.restock||it.alert.price)?' <i class="alon">알림</i>':""}</small><span>${escH(it.price)}</span>${stk}</div></button>`;
@@ -1545,8 +1546,8 @@ function openDetail(id){
   const rows=[["카테고리",$("dtCat").textContent],["사이즈",it.size],wish?["갖고 싶은 순위",prioNum(it.priority)+"순위"]:["구매일",it.date?it.date.replace(/-/g,". "):""],[wish?"파는 곳":"구매처",it.shop]].filter(r=>r[1]);
   const colorRow=it.color?`<div><dt>색상</dt><dd><button class="hexb" type="button" data-hex="${it.color}"><i style="background:${it.color}"></i>${it.color}</button></dd></div>`:"";
   const stLabel={in:"재고 있음",out:"품절",unk:"확인 필요"};
-  const sell=(it.sellers||[]).length?`<div class="dsec"><div class="st-h"><h3>판매처 · 재고</h3><button class="st-ref" type="button" id="stRefresh">↻ 지금 확인</button></div><div class="dlist dsell">${it.sellers.map(s=>`<div class="srow2">
-      <a href="${escH(s.url)}" target="_blank" rel="noopener noreferrer"><span>${s.star?"★ ":""}${escH(s.shop)}</span><em>${escH(s.price||"")} ↗</em></a>
+  const sell=(it.sellers||[]).length?`<div class="dsec"><div class="st-h"><h3>판매처 · 재고</h3><button class="st-ref" type="button" id="stRefresh">↻ 지금 확인</button></div><div class="dlist dsell">${it.sellers.slice().sort((a,b)=>(window.archiveIsOfficial&&window.archiveIsOfficial(it,b)?1:0)-(window.archiveIsOfficial&&window.archiveIsOfficial(it,a)?1:0)).map(s=>`<div class="srow2">
+      <a href="${escH(s.url)}" target="_blank" rel="noopener noreferrer"><span>${s.star?"★ ":""}${escH(s.shop)}${window.archiveIsOfficial&&window.archiveIsOfficial(it,s)?' <i class="offb">공식몰</i>':""}</span><em>${escH(s.price||"")} ↗</em></a>
       ${s.stock?`<div class="stk">${Object.entries(s.stock).map(([sz,v])=>`<span class="sz ${v}${myNames.includes(sz)?" mine":""}" data-col="${escH(sz)}" title="${stLabel[v]}">${escH(sz)}<i>${v==="in"?"✓":v==="out"?"품절":"?"}</i></span>`).join("")}</div>
       <p class="stw">${s.warn?escH(s.warn)+" · ":""}${escH(s.checked||"")} 확인</p>`:""}${s.mto?`<p class="stw"><em class="mto-b">주문 제작</em> 재고 대신 주문 가능 여부로 봐요${s.closed?" · <b>지금 주문 마감</b>":""} <button type="button" class="mto-x" data-mto="${escH(s.url)}">해제</button></p>`:(!s.stock||!Object.keys(s.stock).length)?`<p class="stw"><button type="button" class="mto-x" data-mto="${escH(s.url)}">주문 제작으로 표시</button></p>`:""}</div>`).join("")}</div>${myNames.length&&(it.sellers||[]).some(s=>s.stock)?`<p class="mylegend"><b class="myk">□</b> 내 사이즈 (${escH(myNames.join(", "))})</p>`:""}</div>`:"";
   $("dtBody").innerHTML=`${(typeof galleryHTML==="function"&&galleryHTML(it))||`<div class="dphoto">${it.photo?`<img src="${escH(it.photo)}" alt="${escH(it.name)}">`:`<div class="none">${escH((it.brand||it.name).slice(0,12))}</div>`}</div>`}
