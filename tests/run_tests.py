@@ -97,6 +97,10 @@ def run():
         check("리노스토어 대응표 'US 8 : 260'", pg.evaluate(f"(()=>{{const P={A}.sizePairsFrom('SIZE(cm) 8 : 260 8 1/2 : 265');return {A}.shoeChart(['8','8.5'],true,P).cols}})()"), ["260", "265"])
         check("옷 사이즈를 신발로 착각 안 함", pg.evaluate(f"{A}.shoeChart(['36','38','40'],false)"), None)
         check("반 사이즈 · cm 표기", pg.evaluate(f"['US 8 1/2','US 8 1/2 (26.5cm)','US 6(24CM)','M','Medium (42)'].map({A}.sizeKey)"), ["8.5", "265", "240", "M", "42"])
+        check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
+        txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
+        check("글로 쓴 사이즈표 (비긴202)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", txt),
+              [["1", "2"], ["허리:37.5:39.5", "밑위:33.5:34", "허벅지:33:34", "밑단:29:30", "총장:107:108"]])
 
         print("앱 알아보기 · 접속 안 함")
         check("캡처한 앱 알아보기", pg.evaluate("['나의 할인가 197,210원','즉시 구매가','ZARA 코트','에이블리','올리브영 오늘드림','가격 14,910원'].map(t=>window.archiveShot.detect(t))"),

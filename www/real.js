@@ -95,7 +95,7 @@ async function imageAsDataURL(url,max){const b=await getImageBlob(url);let s=b;t
 const absUrl=(u,base)=>{try{return new URL(u,base).href}catch(e){return ""}};
 const clean=s=>String(s||"").replace(/\s+/g," ").trim();
 const CUR={KRW:"₩",JPY:"¥",USD:"$",EUR:"€",GBP:"£"};
-function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");{const cm=s.match(/\((\d{2}(?:\.\d)?)\s*CM\)/);if(cm)return String(Math.round(+cm[1]*10))}const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
+function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");s=s.replace(/^(?:SIZE|사이즈)\s*[:.]?\s*(\d{1,2})(?!\d)/,"$1 ").replace(/^(\d{1,2})\s*(?:SIZE|사이즈)/,"$1 ");{const cm=s.match(/\((\d{2}(?:\.\d)?)\s*CM\)/);if(cm)return String(Math.round(+cm[1]*10))}const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
 function availOf(v){v=String(v||"").toLowerCase();if(/instock|in_stock|limitedavailability|presale|preorder/.test(v))return "in";if(/outofstock|out_of_stock|soldout|discontinued/.test(v))return "out";return "unk"}
 
 function parseLD(doc){const out=[];doc.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{const j=JSON.parse(s.textContent.trim());const walk=x=>{if(!x)return;if(Array.isArray(x))return x.forEach(walk);if(typeof x!=="object")return;if(x["@graph"])walk(x["@graph"]);const t=x["@type"];if(t==="Product"||(Array.isArray(t)&&t.includes("Product"))||t==="ProductGroup")out.push(x);if(x.hasVariant)walk(x.hasVariant)};walk(j)}catch(e){}});return out}
@@ -129,7 +129,17 @@ function findChart(doc){
     const sizesCol=rows.slice(1).map(r=>r[0]);
     if(sizesCol.length&&sizesCol.every(c=>SZ.test(c))&&h.slice(1).some(x=>LB.test(x))){
       const labels=h.slice(1);return {cols:sizesCol.map(c=>c.toUpperCase()),rows:labels.map((l,li)=>[l.replace(/\(cm\)/i,"").trim(),...rows.slice(1).map(r=>(r[li+1]||"").replace(/cm/i,"").trim())])}}
-  }return null}
+  }return chartFromLines(docText(doc),SZ,LB)}
+/* 글로 쓴 사이즈: '-1사이즈 : 허리 37.5cm / 밑위 33.5cm / …', 'S - 어깨 50 / 가슴 60' (줄바꿈이 사이에 끼어도 읽어요) */
+function chartFromLines(txt,SZ,LB){const by={},labels=[],cols=[];const ls=[];
+  for(const l of String(txt).replace(/\r/g,"").split("\n")){const t=l.replace(/\s+/g," ").trim();if(!t)continue;if(ls.length&&/^[\d.]+\s*(cm|mm)?$/i.test(t))ls[ls.length-1]+=" "+t;else ls.push(t)}
+  for(const ln of ls){const m=ln.match(/^[-•·*]?\s*(?:SIZE\s*)?([\w.]{1,6}?)\s*(?:사이즈|SIZE)?\s*[:：]\s*(.+)$/i);if(!m)continue;
+    const sz=m[1].toUpperCase();if(!SZ.test(sz))continue;const got={};
+    for(const pt of m[2].split(/\s*[\/|,]\s*/)){const q=pt.match(/^([^\d]{1,12}?)\s*:?\s*([\d.]+)\s*(cm|mm)?$/i);if(q&&LB.test(q[1]))got[q[1].trim()]=q[2]}
+    if(Object.keys(got).length<2||by[sz])continue;by[sz]=got;cols.push(sz);Object.keys(got).forEach(l=>{if(!labels.includes(l))labels.push(l)})}
+  if(cols.length<2)return null;return {cols,rows:labels.map(l=>[l,...cols.map(c=>by[c][l]||"")])}}
+function docText(doc){const b=doc.body;if(!b)return "";const c=b.cloneNode(true);c.querySelectorAll("script,style,noscript").forEach(x=>x.remove());
+  c.querySelectorAll("br,p,div,li,tr,h1,h2,h3,h4,h5,h6").forEach(x=>x.after(doc.createTextNode("\n")));return c.textContent}
 
 /* 상품 페이지에 보이는 사이즈 옵션의 '(품절)' 표시로 재고 읽기 (식스샵 등 · 누구나 보는 페이지 글자만 사용) */
 const OPT_RE=/^(XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.5)?|\d{1,2}(?:\s*1\/2|\.5)?|US ?\d{1,2}(?:\s*1\/2|\.5)?)\s*(?:[\[(]\s*(품절|일시 ?품절|sold ?out|out of stock)\s*[\])]|[-·:]\s*(품절|sold ?out))?$/i;
@@ -1278,7 +1288,7 @@ async function chartFromDetail(urls){let n=0;
       if(!SZ_WORD.test(r.text||""))continue;const c=chartFromRows(wordsToRows(r.words));
       if(c&&c.rows.length&&c.cols.length){devLog({k:"ok",host:"상세 이미지 사이즈표",msg:`${c.cols.join("/")} · ${c.rows.map(x=>x[0]).join("/")}`});return {chart:c,img:d}}}}
   return null}
-window.archiveChart={shoeChart,chartFromDetail,sizePairsFrom,sizeKey};
+window.archiveChart={shoeChart,chartFromDetail,sizePairsFrom,sizeKey,findChart};
 /* 이미 저장한 옷도 사이즈표 채우기: 상세 화면 버튼 · 설정에서 한꺼번에 */
 const isGenChart=c=>!!(c&&c.rows&&c.rows[0]&&c.rows[0][0]==="발 길이(mm)"&&c.rows.some(r=>r[0]==="JP(cm)"));
 const hasChart=it=>!!(it.chart&&it.chart.rows&&it.chart.rows.some(r=>r.slice(1).some(Boolean)));
