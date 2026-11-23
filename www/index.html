@@ -436,6 +436,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .st-h{flex-wrap:wrap;gap:6px}
 .seg.prio{display:flex;gap:6px;background:none;padding:0;align-self:flex-start}
 .seg.prio button{width:44px;height:40px;border-radius:10px;border:1.5px solid #ddd5c1;background:var(--paper);font:inherit;font-family:var(--mono);font-size:15px;font-weight:700;color:var(--indigo)}
+.seg.prio{flex-wrap:wrap}.seg.prio button[data-p-add],.seg.prio button[data-p-del],.dpick .pk.prio button[data-pp-add],.dpick .pk.prio button[data-pp-del]{border-style:dashed;opacity:.75}
 .seg.prio button[aria-pressed="true"]{background:var(--orange);border-color:var(--orange);color:#fff}
 .plbl{font-weight:400;font-size:11.5px;color:var(--muted);margin-left:6px;letter-spacing:0}
 .chips.subchips:not([hidden])::before{content:"세부";display:block;width:100%;font-size:11px;font-weight:700;color:var(--orange);letter-spacing:.08em;margin-bottom:2px}
@@ -1525,7 +1526,7 @@ function pinHTML(it){
     stk=ins.length?`<em class="pst in sz-all">재고 ${ins.map(k=>k===my?`<b>${escH(k)}</b>`:escH(k)).join(" · ")}</em>`:`<em class="pst out">전부 품절</em>`}}
   return `<button class="pin" type="button" data-id="${it.id}" data-kind="${it.kind}" data-c="${it.c}" data-s="${it.s||""}">${ph}<div class="tx"><b>${escH((it.brand?it.brand+" ":"")+it.name)}</b><small>${sub}${it.alert&&(it.alert.restock||it.alert.price)?' <i class="alon">알림</i>':""}</small><span>${escH(it.price)}</span>${stk}</div></button>`;
 }
-function prioNum(p){if(typeof p==="number")return p;if(p==="꼭 살 거")return 1;if(p==="고민 중")return 3;const n=parseInt(p,10);return n>=1&&n<=5?n:3}
+function prioNum(p){if(typeof p==="number")return p;if(p==="꼭 살 거")return 1;if(p==="고민 중")return 3;const n=parseInt(p,10);return n>=1&&n<=10?n:3}
 function renderPins(){
   const m=$("masonry");m.querySelectorAll(".pin:not(.add)").forEach(p=>p.remove());
   const ord=ITEMS.map((it,i)=>[it,i]).sort((a,b)=>{const pa=a[0].kind==="wish"?prioNum(a[0].priority):0,pb=b[0].kind==="wish"?prioNum(b[0].priority):0;return pa-pb||a[1]-b[1]}).map(x=>x[0]);

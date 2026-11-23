@@ -214,7 +214,7 @@ async function readProduct(url){
   if(!P.stock){const ss=scriptStock(html);if(ss){P.stock=ss;P.src.push("페이지 상품 데이터")}}
   /* 주문 제작(커스텀 · 오더메이드): 재고 개념이 없는 상품 */
   try{const d2=doc.cloneNode(true);d2.querySelectorAll("script,style,noscript,footer,header,nav").forEach(n=>n.remove());const bt=clean(d2.body?d2.body.textContent:"");
-    if(!P.stock&&/주문\s*제작|커스텀\s*(오더|제작|부츠|슈즈)?|제작\s*기간|오더\s*메이드|수\s*제작|비스포크|made[\s-]*to[\s-]*order|bespoke|custom\s*order|\bMTO\b/i.test(bt+" "+P.name)){P.mto=true;P.src.push("주문 제작")}
+    if(!P.stock&&/주문\s*(과|후|시|즉시|하시면|이\s*들어오면)?\s*(동시에|바로)?\s*제작|주문\s*제작|제작(이|에)?\s*(되며|됩니다|들어가|기간|소요)|\d+\s*(주|일|영업일)\s*(정도|가량|이상)?\s*(소요|걸립)|커스텀\s*(오더|제작|부츠|슈즈)?|오더\s*메이드|수\s*제작|비스포크|made[\s-]*to[\s-]*order|bespoke|custom\s*order|\bMTO\b/i.test(bt+" "+P.name)){P.mto=true;P.src.push("주문 제작")}
     if(P.mto)P.closed=/(주문|오더|접수)\s*(이\s*)?(마감|종료|중단)|판매\s*(중지|종료)/.test(bt)}catch(e){}
   if(!P.stock){try{const i=html.search(/"(?:soldOut|isSoldOut|sold_out|stockQuantity|inventory)"/i);if(i>=0)devLog({k:"info",host:new URL(url).hostname,msg:"재고 데이터 모양: "+html.slice(Math.max(0,i-160),i+160).replace(/\s+/g," ")})}catch(e){}}
   /* 색상별 재고 */
@@ -799,7 +799,7 @@ function dtPickers(it){const body=$("dtBody");if(!body)return;const dl=body.quer
   let kr=dl.querySelector(".dpick.kind");if(!kr){kr=document.createElement("div");dl.insertBefore(kr,cr)}
   kr.className="dpick kind";kr.innerHTML=`<dt>어디에 둘까요</dt><div class="pk big">${[["arc","아카이브 · 산 옷"],["wish","위시 · 갖고 싶은 옷"]].map(([k,n])=>`<button type="button" data-pk="${k}" aria-pressed="${(it.kind==="wish"?"wish":"arc")===k}">${n}</button>`).join("")}</div>`;
   if(it.kind==="wish"){let pr=rowOf("갖고 싶은 순위");if(!pr){pr=document.createElement("div");cr.after(pr)}const pn=prioNum(it.priority);
-    pr.className="dpick";pr.innerHTML=`<dt>갖고 싶은 순위</dt><div class="pk prio">${[1,2,3,4,5].map(n=>`<button type="button" data-pp="${n}" aria-pressed="${n===pn}">${n}</button>`).join("")}</div><small>1순위가 제일 갖고 싶은 거예요 · 위시리스트에서 1순위부터 보여요</small>`}
+    pr.className="dpick";pr.innerHTML=`<dt>갖고 싶은 순위</dt><div class="pk prio">${prioList(pn).map(n=>`<button type="button" data-pp="${n}" aria-pressed="${n===pn}">${n}</button>`).join("")}<button type="button" data-pp-add aria-label="순위 칸 더하기">＋</button>${prioMaxSet()>3?`<button type="button" data-pp-del aria-label="순위 칸 줄이기">−</button>`:""}</div><small>1순위가 제일 갖고 싶은 거예요 · 위시리스트에서 1순위부터 보여요</small>`}
 }
 function dtSave(it,msg){const y=($("dtBody")||{}).scrollTop||0;persistAll();if(typeof renderPins==="function")renderPins();if(typeof buildTree==="function")buildTree();
   openDetail(it.id);const b=$("dtBody");if(b)b.scrollTop=y;if(msg)toast(msg)}
@@ -1445,6 +1445,22 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
+/* 갖고 싶은 순위: 기본 1~3순위, ＋로 칸을 늘려요 (최대 10) */
+function prioMaxSet(){return Math.min(10,Math.max(3,+(localStorage.getItem("archive-prio-max")||3)))}
+function prioMax(){let m=prioMaxSet();ITEMS.forEach(x=>{if(x.kind==="wish"){const n=prioNum(x.priority);if(n>m)m=n}});return Math.min(10,m)}
+function prioList(sel){const m=Math.max(prioMax(),sel||0);return Array.from({length:m},(_,i)=>i+1)}
+function setPrioMax(n){localStorage.setItem("archive-prio-max",String(Math.min(10,Math.max(3,n))))}
+function renderFormPrio(sel){const box=$("fPrio");if(!box)return;const cur=sel||+((box.querySelector("[aria-pressed=true]")||{dataset:{p:0}}).dataset.p)||Math.min(3,prioMax());
+  box.innerHTML=prioList(cur).map(n=>`<button type="button" data-p="${n}" aria-pressed="${n===cur}">${n}</button>`).join("")+`<button type="button" data-p-add aria-label="순위 칸 더하기">＋</button>`+(prioMaxSet()>3?`<button type="button" data-p-del aria-label="순위 칸 줄이기">−</button>`:"")}
+document.addEventListener("click",e=>{const b=e.target.closest("#fPrio [data-p-add],#fPrio [data-p-del]");if(b){e.stopImmediatePropagation();const sel=+((document.querySelector("#fPrio [data-p][aria-pressed=true]")||{dataset:{p:0}}).dataset.p);
+    if(b.hasAttribute("data-p-add")){if(prioMaxSet()>=10){toast("순위는 10순위까지 만들 수 있어요");return}setPrioMax(prioMaxSet()+1)}else{const m=prioMaxSet();if(ITEMS.some(x=>x.kind==="wish"&&prioNum(x.priority)===m)){toast(`${m}순위인 옷이 있어서 줄일 수 없어요`);return}setPrioMax(m-1)}
+    renderFormPrio(Math.min(sel,prioMax())||0);return}
+  const d=e.target.closest("[data-pp-add],[data-pp-del]");if(!d)return;e.stopImmediatePropagation();const it=ITEMS.find(x=>x.id===dtId);
+  if(d.hasAttribute("data-pp-add")){if(prioMaxSet()>=10){toast("순위는 10순위까지 만들 수 있어요");return}setPrioMax(prioMaxSet()+1);if(it)dtSave(it,`${prioMaxSet()}순위 칸을 만들었어요`)}
+  else{const m=prioMaxSet();if(ITEMS.some(x=>x.kind==="wish"&&prioNum(x.priority)===m)){toast(`${m}순위인 옷이 있어서 줄일 수 없어요`);return}setPrioMax(m-1);if(it)dtSave(it,"순위 칸을 줄였어요")}},true);
+if(typeof openRec==="function"){const _or2=openRec;openRec=function(){const r=_or2.apply(this,arguments);renderFormPrio(Math.min(3,prioMax()));return r};window.openRec=openRec}
+document.addEventListener("click",e=>{if(!e.target.closest("#dtEdit"))return;const id=dtId;setTimeout(()=>{const it=ITEMS.find(x=>x.id===id);if(it&&it.kind==="wish")renderFormPrio(prioNum(it.priority))},0)});
+setTimeout(()=>renderFormPrio(3),0);
 /* 목록 제목(위시리스트 등)이 줄바꿈되지 않게 칸에 맞춰 글자 크기를 줄여요 */
 function fitTitle(){const n=$("catName");if(!n)return;n.style.fontSize="";let fs=parseFloat(getComputedStyle(n).fontSize)||32;let k=0;
   while(n.scrollWidth>n.clientWidth+1&&fs>18&&k++<20){fs-=1.5;n.style.fontSize=fs+"px"}}
