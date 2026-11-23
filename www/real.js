@@ -1125,6 +1125,35 @@ function readShot(words,Wd,H){const L=shotLines(words,H);const out={brand:"",tit
   return out}
 function cropData(url,c){return new Promise(ok=>{const im=new Image();im.onload=()=>{try{const cv=document.createElement("canvas");const k=Math.min(1,1600/c.w);cv.width=Math.round(c.w*k);cv.height=Math.round(c.h*k);
   cv.getContext("2d").drawImage(im,c.x,c.y,c.w,c.h,0,0,cv.width,cv.height);ok(cv.toDataURL("image/jpeg",0.9))}catch(e){ok(url)}};im.onerror=()=>ok(url);im.src=url})}
+/* 캡처한 쇼핑 앱 알아보기 + 그 앱 검색 링크 */
+const gSite=(site,q)=>"https://www.google.com/search?q="+encodeURIComponent("site:"+site+" "+q);
+const SRC_APPS=[
+  {id:"musinsa",name:"무신사",re:/무신사|musinsa|무진장|나의 ?할인가/i,url:q=>"https://www.musinsa.com/search/goods?keyword="+encodeURIComponent(q)},
+  {id:"29cm",name:"29CM",re:/29cm/i,url:q=>"https://www.29cm.co.kr/search?keyword="+encodeURIComponent(q)},
+  {id:"kream",name:"KREAM",re:/kream|즉시 ?구매가|즉시 ?판매가|최근 ?거래가/i,url:q=>"https://kream.co.kr/search?keyword="+encodeURIComponent(q)},
+  {id:"fruits",name:"FruitsFamily",re:/fruits ?family|후르츠/i,url:q=>gSite("fruitsfamily.com",q)},
+  {id:"ssf",name:"SSF SHOP",re:/ssf ?shop|\bSSF\b|삼성물산/i,url:q=>gSite("ssfshop.com",q)},
+  {id:"shein",name:"SHEIN",re:/shein|쉬인/i,url:q=>gSite("shein.com",q)},
+  {id:"adidas",name:"adidas",brand:"adidas",re:/adidas|아디다스/i,url:q=>gSite("adidas.co.kr",q)},
+  {id:"nike",name:"Nike",brand:"Nike",re:/\bnike\b|나이키/i,url:q=>"https://www.nike.com/kr/w?q="+encodeURIComponent(q)},
+  {id:"naver",name:"N+스토어",re:/플러스 ?스토어|N\+ ?스토어|스마트 ?스토어|네이버 ?페이|네이버/i,url:q=>"https://search.shopping.naver.com/search/all?query="+encodeURIComponent(q)},
+  {id:"theshop",name:"THE SHOP",re:/the ?shop|yohji|요지 ?야마모토/i,url:q=>gSite("theshopyohjiyamamoto.jp",q)},
+  {id:"topten",name:"탑텐",brand:"TOPTEN10",re:/탑텐|topten/i,url:q=>gSite("topten10mall.com",q)},
+  {id:"uniqlo",name:"UNIQLO",brand:"UNIQLO",re:/uniqlo|유니클로/i,url:q=>"https://www.uniqlo.com/kr/ko/search?q="+encodeURIComponent(q)},
+  {id:"zara",name:"ZARA",brand:"ZARA",re:/\bzara\b|자라/i,url:q=>"https://www.zara.com/kr/ko/search?searchTerm="+encodeURIComponent(q)},
+  {id:"croquet",name:"크로켓",re:/크로켓|croquet/i,url:q=>gSite("croquet.co.kr",q)},
+  {id:"daangn",name:"당근",re:/당근|채팅하기|끌올|daangn/i,url:q=>gSite("daangn.com",q)},
+  {id:"pinterest",name:"Pinterest",re:/pinterest|핀터레스트/i,url:q=>"https://www.pinterest.com/search/pins/?q="+encodeURIComponent(q)},
+  {id:"cosmos",name:"Cosmos",re:/cosmos\.so|\bcosmos\b/i,url:q=>gSite("cosmos.so",q)}];
+function detectSrc(text){return SRC_APPS.find(a=>a.re.test(text||""))||null}
+let shotQ="",shotPrice=null,shotSrc=null;
+function setShotSrc(app){const i=recSellers.findIndex(x=>x.fromShot);if(i>=0)recSellers.splice(i,1);shotSrc=app;
+  if(app&&shotQ){recSellers.push({url:app.url(shotQ),shop:app.name+" (검색)",price:shotPrice?String(shotPrice):"",star:false,fromShot:true})}
+  renderSellers();$("sellersBox").hidden=!recSellers.length}
+function srcPicker(){const st=$("fetchStatus");if(!st||!shotQ)return;const old=$("shotSrcBox");if(old)old.remove();const d=document.createElement("div");d.id="shotSrcBox";d.className="srcbox";
+  d.innerHTML=`<span>캡처한 앱</span><select id="shotSrc" aria-label="캡처한 앱"><option value="">고르지 않음</option>${SRC_APPS.map(a=>`<option value="${a.id}"${shotSrc&&shotSrc.id===a.id?" selected":""}>${escH(a.name)}</option>`).join("")}</select>`;st.appendChild(d)}
+document.addEventListener("change",e=>{if(e.target.id!=="shotSrc")return;const app=SRC_APPS.find(a=>a.id===e.target.value)||null;setShotSrc(app);
+  if(app&&app.brand&&!$("fBrand").value)$("fBrand").value=app.brand;toast(app?`${app.name} 검색 링크를 남겼어요`:"검색 링크를 뺐어요")});
 /* 캡처가 사이즈표면: 지금 열린 옷(기록 화면 · 상세 화면)의 사이즈표를 채워요 */
 const LB_SHOT=/(총장|기장|어깨|가슴|소매|화장|허리|엉덩이|힙|허벅지|밑위|밑단|발볼|발길이|굽|length|chest|shoulder|sleeve|waist|hip|thigh|rise|hem|inseam|着丈|肩幅|身幅|袖丈)/i;
 async function chartFromShot(dataUrl){const st=OCR?await OCR.read({data:dataUrl}):null;if(!st)return null;
@@ -1144,6 +1173,7 @@ async function fromShot(dataUrl){
   let r;try{r=await OCR.read({data:dataUrl})}catch(e){st.textContent="캡처의 글자를 읽지 못했어요 · 직접 적어 주세요";return}
   const im=await new Promise(ok=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ok(null);i.src=dataUrl});
   const S=readShot(r.words,r.w||(im&&im.naturalWidth)||1080,r.h||(im&&im.naturalHeight)||2400);
+  const SRC=detectSrc((S.lines||[]).join(" ")+" "+(r.text||""));if(!S.brand&&SRC&&SRC.brand)S.brand=SRC.brand;
   devLog({k:"share",msg:"캡처: "+JSON.stringify({brand:S.brand,title:S.title,price:S.price})});
   const got=[];
   if(S.brand&&!$("fBrand").value){$("fBrand").value=S.brand;got.push("브랜드")}
@@ -1154,14 +1184,13 @@ async function fromShot(dataUrl){
   if(S.brand&&S.name){const kno=(typeof BR!=="undefined")?BR.brands.find(x=>[x.name,...(x.aka||[])].some(n=>n&&brKey(n)===brKey(S.brand))):null;
     const en=/^[A-Za-z0-9 .&'’\-_]+$/.test(S.brand)?S.brand:(kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-_]+$/.test(n||""))||"":"");
     try{await toOfficial(S.title,null,{ko:S.brand,en:en||(S.ens||[])[0]||"",ens:S.ens||[],name:S.name})}catch(e){}}
-  /* 무신사 · 29CM 캡처면: 그 앱에서 다시 찾을 수 있게 검색 링크를 판매처에 남겨요 (링크만 만들고 접속하지 않아요) */
-  {const all=(S.lines||[]).join(" ")+" "+(r.text||"");const q=[S.brand,S.name].filter(Boolean).join(" ").trim();
-    const mk=/무신사|musinsa|무진장|나의 ?할인가/i.test(all)?{shop:"무신사",url:"https://www.musinsa.com/search/goods?keyword="+encodeURIComponent(q)}:/29cm/i.test(all)?{shop:"29CM",url:"https://www.29cm.co.kr/search?keyword="+encodeURIComponent(q)}:null;
-    if(mk&&q&&!recSellers.some(x=>/musinsa\.com|29cm\.co\.kr/.test(x.url||""))){recSellers.push({url:mk.url,shop:mk.shop+" (검색)",price:S.price?String(S.price):"",star:false});renderSellers();$("sellersBox").hidden=false}}
+  /* 캡처한 앱에서 다시 찾을 수 있게 그 앱의 검색 링크를 판매처에 남겨요 (링크만 만들고 앱이 접속하지는 않아요) */
+  shotQ=[S.brand,S.name].filter(Boolean).join(" ").trim();shotPrice=S.price;setShotSrc(SRC);
   if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker()}
   const after=st.textContent;const okOff=/^공식몰\(/.test(after);
-  st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요")}
-window.archiveShot={read:readShot,from:fromShot};
+  st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요");
+  srcPicker()}
+window.archiveShot={read:readShot,from:fromShot,detect:t=>{const a=detectSrc(t);return a?a.id:null}};
 /* ---------- 27) 사이즈표 자동 채우기: 상세 이미지 글자 읽기 · 신발은 옵션 사이즈로 나라별 표 ---------- */
 const SHOE_RE=/부츠|부트|boots?\b|shoes?\b|sneakers?|스니커|로퍼|loafer|구두|더비|derby|옥스퍼드|oxford|샌들|sandal|슬리퍼|뮬|워커|engineer|엔지니어|chukka|처커|モンキー|ブーツ|シューズ|vaudeville/i;
 /* 신발 사이즈 옵션(mm · cm · US) → 나라별 표. pairs: 쇼핑몰이 적어 둔 'US 8 : 260' 같은 브랜드 기준 */
