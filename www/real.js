@@ -79,9 +79,9 @@ window.addEventListener("pagehide",()=>persistAll());
 const UA="Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
 const UA_PC="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
 const uaFor=u=>/musinsa\.com|onelink\.me|page\.link|app\.link/i.test(u)?UA_PC:UA;
-async function getText(url){
+async function getText(url,ua){
   if(window.__testPages&&url in window.__testPages){const v=window.__testPages[url];if(v===null)throw new Error("404");return v}
-  if(Http){const r=await Http.get({url,headers:{"User-Agent":uaFor(url),"Accept":"text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8","Accept-Language":"ko-KR,ko;q=0.9,ja;q=0.7,en;q=0.6"},responseType:"text",connectTimeout:15000,readTimeout:20000});
+  if(Http){const r=await Http.get({url,headers:{"User-Agent":ua||uaFor(url),"Accept":"text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8","Accept-Language":"ko-KR,ko;q=0.9,ja;q=0.7,en;q=0.6"},responseType:"text",connectTimeout:15000,readTimeout:20000});
     if(r.status>=400)throw new Error("HTTP "+r.status);return typeof r.data==="string"?r.data:JSON.stringify(r.data)}
   const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);return await r.text()}
 async function getImageBlob(url){
@@ -275,6 +275,8 @@ async function readProduct(url){
   if(P.price==null){for(const el of doc.querySelectorAll('#span_product_price_text,.item_price,.prd_price,.price_info .price,.prdPrice,.price strong,strong.price,.sale_price,.price')){const m=clean(el.textContent).match(/([\d]{1,3}(?:,\d{3})+|\d{4,})\s*원/);if(m){P.price=+m[1].replace(/,/g,"");P.currency=P.currency||"KRW";P.src.push("가격 글자");break}}}
   if(!P.stock&&offers.length===1&&offers[0].availability)P.whole=availOf(offers[0].availability);
   P.chart=findChart(doc);if(P.chart)P.src.push("실측표");P.htmlLen=html.length;
+  /* 모바일 화면에 상세 설명이 안 들어 있는 쇼핑몰(카페24 일부): 같은 페이지의 PC 화면으로 한 번 더 */
+  if(!P.chart&&Http&&/cafe24|EC_SDE|ec-base|\/product\/detail\.html|\/product\/[^/]+\/\d+\//i.test(html+" "+url)){try{const h2=await getText(url,UA_PC);const c2=findChart(new DOMParser().parseFromString(h2,"text/html"));if(c2){P.chart=c2;P.src.push("실측표(PC)")}}catch(e){}}
   try{P.sizePairs=sizePairsFrom((doc.body&&doc.body.textContent||"").replace(/\s+/g," "))}catch(e){}
   /* 상세 설명 이미지 (사이즈표가 사진으로 들어간 쇼핑몰이 많아요) */
   {const seen=new Set(P.images);P.detail=[...new Set([...doc.querySelectorAll("#prdDetail img, .cont img, .detail img, .detailArea img, .prd-detail img, [class*=detail] img, [class*=Detail] img, .product-description img, .product__description img, .rte img")]
@@ -646,7 +648,10 @@ function simName(a,b){const A=toks(a),B=new Set(toks(b));if(!A.length)return 0;r
 function shortQuery(name,brand){let n=String(name||"").replace(/\(.*?\)|\[.*?\]/g," ");const bt=new Set(toks(brand));const w=toks(n).filter(x=>!bt.has(x));return w.slice(0,3).join(" ")}
 /* 쇼핑몰 검색: 여러 단어로 못 찾는 몰(프로드셔츠 등 카페24 일부)은 핵심 단어 하나로도 한 번 더 찾아 합쳐요 */
 async function searchShop(origin,q){const a=await searchShop0(origin,q);const w=String(q||"").replace(/\[.*?\]|\(.*?\)/g," ").split(/\s+/).filter(x=>x.length>=2&&!/^(셔츠|팬츠|자켓|재킷|코트|니트|바지|티셔츠|shirt|pants|jacket|coat)$/i.test(x));
-  if(w.length<2)return a;const b=await searchShop0(origin,w[0]);const seen=new Set(a.map(x=>x.url));return a.concat(b.filter(x=>!seen.has(x.url)))}
+  if(w.length<2)return a;const seen=new Set(a.map(x=>x.url));let out=a.slice();
+  const keys=[...new Set(w.filter(x=>x.length>=3||/[가-힣]{2}/.test(x)))].slice(0,3);
+  for(const k of keys){const b=await searchShop0(origin,k);b.forEach(x=>{if(!seen.has(x.url)){seen.add(x.url);out.push(x)}});if(b.length)break}
+  return out}
 async function searchShop0(origin,q){const enc=encodeURIComponent(q);
   try{const t=await getText(`${origin}/search/suggest.json?q=${enc}&resources[type]=product&resources[limit]=6`);const j=JSON.parse(t);
     const ps=(((j||{}).resources||{}).results||{}).products||[];if(Array.isArray(ps))return ps.map(p=>({name:p.title,url:absUrl(String(p.url||"").split("?")[0],origin)})).filter(p=>p.url)}catch(e){}

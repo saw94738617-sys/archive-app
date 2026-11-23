@@ -33,6 +33,9 @@ def tea_block(sz, a, b, c):
 PD_NONE = '<p>검색결과가 없습니다</p><ul><li><a href="/product/mto-레귤러-카라-드레스-셔츠-블루/91/category/67/display/1/"><span class="name">MTO) 레귤러 카라 드레스 셔츠 (블루)</span></a></li></ul>'
 PD_KUBAN = '<ul>' + ''.join(f'<li><a href="/product/x/{n}/category/65/display/1/"><span class="name">{t}</span></a></li>' for n, t in [(292, "쿠반 오픈카라 린넨 셔츠 (그레이)"), (291, "쿠반 오픈카라 린넨 셔츠 (네이비)"), (246, "[Restock] 쿠반 옥스포드 오버 셔츠 (그레이 S.P)")]) + '</ul>'
 PAGES = {
+    "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("CL WOVEN LEATHER BELT", safe=""): PD_NONE,
+    "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("CL", safe=""): "<p>검색결과가 없습니다</p>",
+    "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("WOVEN", safe=""): '<ul><li><a href="/product/cl-woven-leather-belt-dark-brown/1280/category/93/display/1/"><span class="name">CL WOVEN LEATHER BELT (DARK BROWN)</span></a></li></ul>',
     "https://pd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("쿠반 오픈카라 린넨", safe=""): PD_NONE,
     "https://pd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("쿠반", safe=""): PD_KUBAN,
     # 테아트리노: 사이즈마다 표가 따로
@@ -126,6 +129,8 @@ def run():
         check("공식몰 알아보기: 영어 이름 · 하위 주소 (노매뉴얼)", off, [True, True, False])
         nmfix = pg.evaluate("""async()=>{const it={id:'nmx',brand:'노매뉴얼',name:'NOMANUAL 노매뉴얼 0 21만',kind:'wish',sellers:[{shop:'nomanual',url:'https://t.test/nm'}]};await window.archiveRefresh(it,true);return it.name}""")
         check("잘못 들어간 이름 'NOMANUAL 노매뉴얼 0 21만' → 상품 이름", nmfix, "TRIBAL TRACK JACKET - BLACK")
+        wd = pg.evaluate("""async()=>{const L=await window.archiveOfficial.searchShop('https://wd.test','CL WOVEN LEATHER BELT');return L.map(x=>x.url).filter(u=>u.includes('1280')).length}""")
+        check("영어 상품 이름: 짧은 단어(CL) 건너뛰고 다음 단어로 찾기", wd, 1)
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
