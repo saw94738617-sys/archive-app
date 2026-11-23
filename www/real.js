@@ -112,7 +112,7 @@ function findChart(doc){
     if(kv.length>=2){const labels=[];kv.forEach(k=>k.body.forEach(r=>{const l=r[0].replace(/\(cm\)/i,"").trim();if(!labels.includes(l))labels.push(l)}));
       const cols=kv.map(k=>k.sz);return {cols,rows:labels.map(l=>[l,...kv.map(k=>{const r=k.body.find(r=>r[0].replace(/\(cm\)/i,"").trim()===l);return r?r[1].replace(/cm/i,"").trim():""})])}}}
   for(const t of doc.querySelectorAll("table")){
-    const rows=[...t.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>clean(td.textContent)));if(rows.length<2)continue;
+    const rows=[...t.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>clean(td.textContent).replace(/^\[\s*(.*?)\s*\]$/,"$1").replace(/^\(\s*(.*?)\s*\)$/,"$1")));if(rows.length<2)continue;
     /* 사이즈별 블록형: '5' 한 칸 줄 다음에 '가슴 단면 | 59' 줄들 */
     {let cur=null;const by={},labels=[];for(const r of rows){const cells=r.filter(Boolean);
       if(cells.length===1&&SZ.test(cells[0])){cur=cells[0].toUpperCase();by[cur]=by[cur]||{};continue}
@@ -1235,14 +1235,15 @@ window.archiveWatch={list:watchList,push:pushWatch,pull:pullWatch,now:()=>NTP&&N
 
 /* ---------- 22) 사이즈표 사진 글자 읽기 (폰 안에서) ---------- */
 const OCR=NATIVE?plug("ArchiveOcr"):null;
-function wordsToRows(words){const W=(words||[]).map(w=>({t:clean(w.t),x:+w.x,y:+w.y,w:+w.w,h:+w.h})).filter(w=>w.t);if(!W.length)return [];
+function wordsToRows(words){const W=(words||[]).map(w=>({t:clean(w.t).replace(/^[\[\](){}|]+|[\[\](){}|]+$/g,"").trim(),x:+w.x,y:+w.y,w:+w.w,h:+w.h})).filter(w=>w.t);if(!W.length)return [];
   const hs=W.map(w=>w.h).sort((a,b)=>a-b),mh=hs[Math.floor(hs.length/2)]||10;
   W.forEach(w=>w.cy=w.y+w.h/2);W.sort((a,b)=>a.cy-b.cy);
   const rows=[];for(const w of W){const r=rows[rows.length-1];if(r&&Math.abs(w.cy-r.cy)<mh*0.6){r.ws.push(w);r.cy=(r.cy*(r.ws.length-1)+w.cy)/r.ws.length}else rows.push({cy:w.cy,ws:[w]})}
   return rows.map(r=>{r.ws.sort((a,b)=>a.x-b.x);const cells=[];let cur=null;
     for(const w of r.ws){const isNum=/^[\d.,]+$/.test(w.t);if(cur&&!isNum&&!cur.num&&w.x-(cur.x+cur.w)<mh*0.9){cur.t+=" "+w.t;cur.w=w.x+w.w-cur.x}else{cur={t:w.t,x:w.x,w:w.w,num:isNum};cells.push(cur)}}
     return cells.map(c=>c.t.replace(/^[|:·]+|[|:·]+$/g,"").trim()).filter(Boolean)})}
-function chartFromRows(rows){if(rows.length<2)return null;const esc=t=>String(t).replace(/[&<>]/g,"");
+function chartFromRows(rows){for(let k=0;k<Math.min(6,rows.length-1);k++){const c=chartFromRows0(rows.slice(k));if(c&&c.rows.length&&c.cols.length)return c}return null}
+function chartFromRows0(rows){if(rows.length<2)return null;const esc=t=>String(t).replace(/[&<>]/g,"");
   const html="<table>"+rows.map(r=>"<tr>"+r.map(c=>"<td>"+esc(c)+"</td>").join("")+"</tr>").join("")+"</table>";
   try{return findChart(new DOMParser().parseFromString(html,"text/html"))}catch(e){return null}}
 async function ocrChart(dataUrl){if(!OCR){toast("사진 글자 읽기는 폰 앱에서 돼요");return}
@@ -1257,9 +1258,11 @@ function ocrBtn(){const acts=document.querySelector(".szt-acts");if(!acts||$("oc
   b.onclick=()=>{if(recChartImg){ocrChart(recChartImg);return}const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=async()=>{const f0=inp.files&&inp.files[0];if(!f0)return;let f=f0;try{if(typeof shrink==="function")f=await shrink(f0,2000)}catch(e){}
       const fr=new FileReader();fr.onload=()=>{recChartImg=fr.result;renderChart();ocrChart(recChartImg)};fr.readAsDataURL(f)};inp.click()}}
-ocrBtn();
+/* 사진 저장 버튼이 글자 읽기까지 해요 (따로 버튼 없음) */
+{const acts=document.querySelector(".szt-acts");if(acts&&!$("ocrSt")){const p=document.createElement("p");p.id="ocrSt";p.className="note";p.hidden=true;p.style.margin="8px 0 0";acts.after(p)}}
 /* 사이즈표 사진을 저장하면, 표가 비어 있을 때 바로 읽어서 채워요 */
-$("sztImg").addEventListener("change",()=>setTimeout(()=>{if(recChartImg&&(!recChart||!recChart.rows.some(r=>r.slice(1).some(Boolean))))ocrChart(recChartImg)},700));
+$("sztImg").addEventListener("change",()=>setTimeout(()=>{if(recChartImg)ocrChart(recChartImg)},700));
+{const lb=document.querySelector("label.szimg");if(lb&&lb.firstChild&&lb.firstChild.nodeType===3)lb.firstChild.textContent="📷 사진으로 표 채우기"}
 window.archiveOcr={wordsToRows,chartFromRows};
 
 /* ---------- 23) 사진 원본 화질로 저장 ---------- */
