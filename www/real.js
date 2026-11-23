@@ -1441,7 +1441,7 @@ function splitBrand(nm){nm=String(nm||"").replace(/\s*-\s*사이즈\s*&\s*후기
 function officialFromBR(b){if(typeof BR==="undefined")return "";const keys=[b.ko,b.en].filter(Boolean);const x=BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&keys.some(k=>brKey(k)===brKey(n))));
   if(!x)return "";const l=(x.links||[]).find(l=>/공식/.test(l.label||""))||(x.links||[])[0];return l?originOf(l.url):""}
 async function guessOfficial(b){if(!b.en)return "";const slug=b.en.toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");if(slug.length<3)return "";
-  const cands=[`https://${slug}.co.kr`,`https://www.${slug}.co.kr`,`https://${slug}.com`,`https://www.${slug}.com`,`https://${slug}.kr`,`https://${slug}official.com`];
+  const cands=[`https://${slug}.co.kr`,`https://www.${slug}.co.kr`,`https://${slug}.com`,`https://www.${slug}.com`,`https://${slug}.kr`,`https://${slug}official.com`,`https://www.${slug}.co.uk`,`https://${slug}.jp`,`https://www.${slug}.net`];
   const want=[b.en,b.ko].filter(Boolean).map(x=>x.toLowerCase().replace(/\s+/g,""));
   const one=async u=>{const html=await getText(u+"/");const d=new DOMParser().parseFromString(html,"text/html");const t=(meta(d,"og:site_name","og:title")+" "+(d.title||"")).toLowerCase().replace(/\s+/g,"");
     if(want.some(w=>t.includes(w)))return u;throw new Error("다른 사이트")};
@@ -1517,6 +1517,22 @@ document.addEventListener("change",e=>{if(e.target.id!=="recPhoto")return;setTim
   const old=$("readShotBtn");if(old)old.remove();const b=document.createElement("button");b.type="button";b.id="readShotBtn";b.className="altgo";b.style.marginTop="8px";
   b.textContent="📷 이 사진에서 글자 읽기 (쇼핑 앱 캡처라면)";st.appendChild(b)},700)});
 document.addEventListener("click",e=>{const b=e.target.closest("#readShotBtn");if(!b)return;const img=recPhotoUrl;b.remove();if(img)fromShot(img)});
+/* 브랜드 · 편집샵: 링크 없는 브랜드의 공식몰 찾기 (누를 때만 · 브랜드 첫 화면만 열어 이름이 맞는지 확인) */
+if(typeof renderBR==="function"){const _rb=renderBR;renderBR=function(){const r=_rb.apply(this,arguments);try{if(BR.tab!=="brand")return r;
+    const none=BR.brands.filter(x=>!(x.links||[]).length);
+    document.querySelectorAll("#brBody .brcard").forEach(c=>{const x=BR.brands.find(b=>b.id===c.dataset.id);if(!x||(x.links||[]).length)return;const nl=c.querySelector(".nolink");
+      if(nl&&!c.querySelector("[data-brfind]"))nl.insertAdjacentHTML("afterend",`<div class="brfind"><button type="button" class="altgo" data-brfind>🔎 공식몰 자동 찾기</button><button type="button" class="altshop" data-brweb>🌐 웹에서 찾기</button></div>`)});
+    const tabs=document.querySelector("#brBody .brtabs");if(tabs&&none.length>1&&!$("brFindAll"))tabs.insertAdjacentHTML("afterend",`<button type="button" class="altgo" id="brFindAll" style="margin:8px 0 4px">🔎 링크 없는 브랜드 ${none.length}개 공식몰 한 번에 찾기</button>`)}catch(e){}return r};window.renderBR=renderBR}
+function brEn(x){const all=[x.name,...(x.aka||[])].filter(Boolean);return all.find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n))||""}
+async function findBrandOfficial(x){const en=brEn(x);if(!en)return "";const o=await guessOfficial({en,ko:x.name});if(o&&!noFetch(o)){rememberOfficial({ko:x.name,en},o);return o}return ""}
+document.addEventListener("click",async e=>{
+  const w=e.target.closest("[data-brweb]");if(w){const c=w.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(x)window.open("https://www.google.com/search?q="+encodeURIComponent(x.name+" 공식몰 official"),"_blank","noopener");return}
+  const f=e.target.closest("[data-brfind]");if(f){if(!NATIVE){toast("공식몰 찾기는 폰 앱에서 돼요");return}const c=f.closest(".brcard");const x=c&&BR.brands.find(b=>b.id===c.dataset.id);if(!x)return;
+    if(!brEn(x)){toast(`${x.name}의 영어 이름을 몰라서 못 찾아요 · '웹에서 찾기'로 주소를 넣어 주세요`);return}
+    f.disabled=true;f.textContent="찾는 중…";const o=await findBrandOfficial(x);renderBR();toast(o?`${x.name} 공식몰을 찾았어요 · ${o.replace(/^https?:\/\//,"")}`:`${x.name} 공식몰을 자동으로 못 찾았어요 · '웹에서 찾기'로 주소를 넣어 주세요`);return}
+  const a=e.target.closest("#brFindAll");if(a){if(!NATIVE){toast("공식몰 찾기는 폰 앱에서 돼요");return}const list=BR.brands.filter(x=>!(x.links||[]).length);a.disabled=true;let ok=0;
+    for(let i=0;i<list.length;i++){a.textContent=`찾는 중… ${i+1}/${list.length}`;try{if(await findBrandOfficial(list[i]))ok++}catch(err){}}
+    renderBR();toast(`공식몰 ${ok}개를 찾았어요 (${list.length}개 중) · 못 찾은 곳은 '웹에서 찾기'로 넣어 주세요`)}});
 /* 사이즈표 사진 빼기 (기록 화면 · 상세 화면) */
 document.addEventListener("click",e=>{if(e.target.closest("#sztImgDel")){e.preventDefault();recChartImg="";const f=$("sztImg");if(f)f.value="";renderChart();toast("사이즈표 사진을 뺐어요 · 저장하면 반영돼요");return}
   const b=e.target.closest("[data-delchartimg]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;it.chartImg="";it.upd=Date.now();dtSave(it,"사이즈표 사진을 뺐어요")});
