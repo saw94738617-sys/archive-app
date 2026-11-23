@@ -1675,11 +1675,11 @@ window.archiveFx={rates:fxRates,conv:(v,from,to,r)=>{const k=v/r[from]*r[to];ret
     toast(`${from}${v.toLocaleString("ko-KR")} → ${to}${n.toLocaleString("ko-KR")} · ${fx.rough?"대략 환율(인터넷 연결 확인)":"환율 "+fx.date}`)})}}
 /* 문제 보내기: 못 읽은 사이트와 이유만 모아 복사 (개인 기록 · 사진 · 계정 정보 없음) */
 (()=>{const dr=$("drawer");const set=$("openSet");if(!dr||!set||$("sendIssues"))return;const b=document.createElement("button");b.className="mi";b.type="button";b.id="sendIssues";b.innerHTML="문제 보내기 <span>↗</span>";set.after(b);
-  b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const fails=L.filter(x=>x.k==="fail"||x.k==="err"||x.k==="warn"||x.k==="user");
+  b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const since=+(localStorage.getItem("archive-report-at")||0);const fails=L.filter(x=>(x.t||0)>since&&(x.k==="fail"||x.k==="err"||x.k==="warn"||x.k==="user"));
     const by={};fails.forEach(x=>{const k=(x.host||"?")+" · "+String(x.msg||"").slice(0,120)+(x.url?"\n    "+x.url:"");by[k]=(by[k]||0)+1});
     const lines=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([k,n])=>`- ${k}${n>1?" (×"+n+")":""}`);
     const ver=(window.ARCHIVE_VERSION||"")+"";const txt=`[아카이브 문제 보고] ${ver}\n`+(lines.length?lines.join("\n"):"- 기록된 문제가 없어요");
-    if(!lines.length){toast("기록된 문제가 없어요");return}await shareOut(txt)}})();
+    if(!lines.length){toast(since?"지난번 보낸 뒤로 새 문제가 없어요":"기록된 문제가 없어요");return}await shareOut(txt);try{localStorage.setItem("archive-report-at",String(Date.now()))}catch(e){}}})();
 /* 캡처로 넣은 'OO (검색)': 그 앱에서 검색 화면을 열고, 사용자가 상품을 골라 공유하면 진짜 링크로 바뀌어요 */
 document.addEventListener("click",e=>{const b=e.target.closest("[data-linkfix]");if(!b)return;e.preventDefault();const s=recSellers[+b.dataset.linkfix];if(!s)return;
   const nm=s.shop.replace(/\s*\(검색\)$/,"");window.open(s.url,"_blank","noopener");toast(`${nm}에서 상품을 열고 공유 → 아카이브를 누르면 이 자리에 들어가요`)});
