@@ -1142,6 +1142,11 @@ function readShot(words,Wd,H){const L=shotLines(words,H);const out={brand:"",tit
     .filter(w=>!titleWords.has(w.t.toLowerCase())&&!/^(ai|new|best|sale|black|white|lv|kr|us|eu|jp)$/i.test(w.t));
   ascii.sort((a,b)=>(bl?Math.abs(a.y-bl.y)-Math.abs(b.y-bl.y):0));
   for(const w of ascii.slice(0,4))pushEn(w.t);
+  /* 숫자가 붙은 브랜드: 'BEGIN 2.0.2' 로고, '비긴202' → begin202 */
+  {const dig=(String(out.brand||"").match(/(\d{2,4})\s*$/)||[])[1];const near=bl?L.filter(l=>Math.abs(l.y-bl.y)<H*0.04):L;
+    const joined=near.concat(L).map(l=>l.t).filter(t=>/^[A-Za-z][A-Za-z0-9 ._\-]{1,24}\d[\d .]*$/.test(t)).map(t=>t.replace(/[^A-Za-z0-9]/g,"")).filter(t=>t.length>=4);
+    const lead=[...new Set(joined)];if(dig)ens.forEach(e=>{const a=e.replace(/[^A-Za-z]/g,"");if(a.length>=3&&!a.endsWith(dig))lead.push(a+dig)});
+    for(const c of lead.reverse()){if(!ens.some(e=>brKey(e)===brKey(c)))ens.unshift(c)}}
   out.ens=ens;
   const bottom=(bl||title)?((bl&&title?Math.min(bl.y,title.y):(bl||title).y)-H*0.012):0;
   const nav=L.filter(l=>l.y<H*0.12);const top=nav.length?Math.max(...nav.map(l=>l.b))+H*0.015:H*0.08;
@@ -1236,7 +1241,7 @@ async function fromShot(dataUrl){
   const after=st.textContent;const okOff=/^공식몰\(/.test(after);
   st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^(무신사는 )?링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요");
   srcPicker()}
-window.archiveShot={read:readShot,from:fromShot,detect:t=>{const a=detectSrc(t);return a?a.id:null}};
+window.archiveShot={read:readShot,from:fromShot,ens:(w,W,H)=>readShot(w,W,H).ens,detect:t=>{const a=detectSrc(t);return a?a.id:null}};
 /* ---------- 27) 사이즈표 자동 채우기: 상세 이미지 글자 읽기 · 신발은 옵션 사이즈로 나라별 표 ---------- */
 const SHOE_RE=/부츠|부트|boots?\b|shoes?\b|sneakers?|스니커|로퍼|loafer|구두|더비|derby|옥스퍼드|oxford|샌들|sandal|슬리퍼|뮬|워커|engineer|엔지니어|chukka|처커|モンキー|ブーツ|シューズ|vaudeville/i;
 /* 신발 사이즈 옵션(mm · cm · US) → 나라별 표. pairs: 쇼핑몰이 적어 둔 'US 8 : 260' 같은 브랜드 기준 */
@@ -1507,6 +1512,11 @@ setTimeout(()=>renderFormPrio(3),0);
 function fitTitle(){const n=$("catName");if(!n)return;n.style.fontSize="";let fs=parseFloat(getComputedStyle(n).fontSize)||32;let k=0;
   while(n.scrollWidth>n.clientWidth+1&&fs>18&&k++<20){fs-=1.5;n.style.fontSize=fs+"px"}}
 {const n=$("catName");if(n){new MutationObserver(()=>requestAnimationFrame(fitTitle)).observe(n,{childList:true,characterData:true,subtree:true});window.addEventListener("resize",()=>requestAnimationFrame(fitTitle));setTimeout(fitTitle,500)}}
+/* 기록 화면에서 직접 올린 사진도 캡처처럼 글자를 읽을 수 있게 */
+document.addEventListener("change",e=>{if(e.target.id!=="recPhoto")return;setTimeout(()=>{if(!OCR||!/^data:image/.test(recPhotoUrl||""))return;const st=$("fetchStatus");if(!st)return;
+  const old=$("readShotBtn");if(old)old.remove();const b=document.createElement("button");b.type="button";b.id="readShotBtn";b.className="altgo";b.style.marginTop="8px";
+  b.textContent="📷 이 사진에서 글자 읽기 (쇼핑 앱 캡처라면)";st.appendChild(b)},700)});
+document.addEventListener("click",e=>{const b=e.target.closest("#readShotBtn");if(!b)return;const img=recPhotoUrl;b.remove();if(img)fromShot(img)});
 /* 사이즈표 사진 빼기 (기록 화면 · 상세 화면) */
 document.addEventListener("click",e=>{if(e.target.closest("#sztImgDel")){e.preventDefault();recChartImg="";const f=$("sztImg");if(f)f.value="";renderChart();toast("사이즈표 사진을 뺐어요 · 저장하면 반영돼요");return}
   const b=e.target.closest("[data-delchartimg]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;it.chartImg="";it.upd=Date.now();dtSave(it,"사이즈표 사진을 뺐어요")});
