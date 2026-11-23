@@ -1565,7 +1565,7 @@ function renderPins(){
   let dir=1;try{dir=localStorage.getItem("archive-prio-dir")==="desc"?-1:1}catch(e){}
   if(!$("prioDir")){m.insertAdjacentHTML("beforebegin",`<div class="priodir-wrap"><button type="button" id="prioDir" class="priodir"></button></div>`);$("prioDir").onclick=()=>{let d="asc";try{d=localStorage.getItem("archive-prio-dir")==="desc"?"asc":"desc";localStorage.setItem("archive-prio-dir",d)}catch(e){}renderPins();toast(d==="desc"?"위시를 낮은 순위부터 보여요":"위시를 1순위부터 보여요")}}
   $("prioDir").innerHTML=dir===1?"갖고 싶은 순위 · <b>1순위부터</b> ↓":"갖고 싶은 순위 · <b>낮은 순위부터</b> ↑";
-  const ord=ITEMS.map((it,i)=>[it,i]).sort((a,b)=>{const pa=a[0].kind==="wish"?prioNum(a[0].priority):0,pb=b[0].kind==="wish"?prioNum(b[0].priority):0;return (pa-pb)*dir||a[1]-b[1]}).map(x=>x[0]);
+  const ord=ITEMS.map((it,i)=>[it,i]).sort((a,b)=>{const pa=a[0].kind==="wish"?prioNum(a[0].priority):0,pb=b[0].kind==="wish"?prioNum(b[0].priority):0;const ci=it=>{const i=CATS.findIndex(c=>c.id===it.c);return i<0?99:i};return (pa-pb)*dir||ci(a[0])-ci(b[0])||a[1]-b[1]}).map(x=>x[0]);
   m.insertAdjacentHTML("afterbegin",ord.map(pinHTML).join(""));
   const on=document.querySelector(".drawer .mi.on[data-c]");
   if(on){const c=on.dataset.c,s=on.dataset.s,kd=on.dataset.kind;let n=0;m.querySelectorAll(".pin").forEach(p=>{const show=pinMatch(p,c,s,kd);p.hidden=!show;if(show&&p.dataset.c!=="add")n++});$("catCount").textContent=n+" PINS"}

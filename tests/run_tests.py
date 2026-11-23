@@ -114,6 +114,11 @@ def run():
         check("여러 단어로 못 찾는 몰(프로드셔츠): 핵심 단어로 다시 찾기", pd, "https://pd.test/product/x/291/category/65/display/1/")
         fx = pg.evaluate("""(()=>{const r={KRW:1,USD:0.0007,JPY:0.1};return [window.archiveFx.conv(115,'USD','KRW',r),window.archiveFx.conv(150000,'KRW','JPY',r),window.archiveFx.conv(150000,'KRW','USD',r)]})()""")
         check("화폐 바꾸면 금액 환산", fx, [164300, 15000, 105])
+        po = pg.evaluate("""(()=>{const keep=ITEMS.slice();ITEMS.length=0;
+          [['a2','outer',2],['s1','shoes',1],['o1','outer',1],['b1','bottom',1]].forEach(([id,c,p])=>ITEMS.push({id,kind:'wish',c,priority:p,name:id,sellers:[]}));
+          try{localStorage.setItem('archive-prio-dir','asc')}catch(e){}renderPins();const r=[...document.querySelectorAll('#masonry .pin[data-id]')].map(x=>x.dataset.id);
+          ITEMS.length=0;keep.forEach(x=>ITEMS.push(x));renderPins();return r})()""")
+        check("같은 순위끼리는 카테고리 순서 (아우터 → 하의 → 신발)", po, ["o1", "b1", "s1", "a2"])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
