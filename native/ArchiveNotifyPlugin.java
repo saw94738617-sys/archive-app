@@ -196,6 +196,16 @@ public class ArchiveNotifyPlugin extends Plugin {
         if (!url.startsWith("http")) { call.reject("링크가 아니에요"); return; }
         Uri u = Uri.parse(url);
         JSObject r = new JSObject();
+        String pkg = call.getString("pkg", "");
+        if (pkg != null && !pkg.isEmpty()) {
+            try {
+                Intent p = new Intent(Intent.ACTION_VIEW, u);
+                p.setPackage(pkg);
+                p.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(p);
+                r.put("via", "app"); call.resolve(r); return;
+            } catch (Exception e) { /* 앱 없음 · 그 주소를 못 받음 → 아래로 */ }
+        }
         try {
             if (Build.VERSION.SDK_INT >= 30) {
                 Intent app = new Intent(Intent.ACTION_VIEW, u);

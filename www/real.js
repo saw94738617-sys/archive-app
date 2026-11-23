@@ -1216,7 +1216,7 @@ const SRC_APPS=[
 function detectSrc(text){return SRC_APPS.find(a=>a.re.test(text||""))||null}
 let shotQ="",shotPrice=null,shotSrc=null;
 function setShotSrc(app){const i=recSellers.findIndex(x=>x.fromShot);if(i>=0)recSellers.splice(i,1);shotSrc=app;
-  if(app&&shotQ){recSellers.push({url:app.url(shotQ),shop:app.name+" (검색)",price:shotPrice?String(shotPrice):"",star:false,fromShot:true})}
+  if(app&&shotQ){recSellers.push({url:app.url(shotQ),shop:app.name+" (검색)",price:shotPrice?"₩"+Number(shotPrice).toLocaleString("ko-KR"):"",star:false,fromShot:true})}
   renderSellers();$("sellersBox").hidden=!recSellers.length}
 function srcPicker(){const st=$("fetchStatus");if(!st||!shotQ)return;const old=$("shotSrcBox");if(old)old.remove();const d=document.createElement("div");d.id="shotSrcBox";d.className="srcbox";
   d.innerHTML=`<span>캡처한 앱</span><select id="shotSrc" aria-label="캡처한 앱"><option value="">고르지 않음</option>${SRC_APPS.map(a=>`<option value="${a.id}"${shotSrc&&shotSrc.id===a.id?" selected":""}>${escH(a.name)}</option>`).join("")}</select>`;st.appendChild(d)}
@@ -1599,7 +1599,10 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-linkfix]")
   const nm=s.shop.replace(/\s*\(검색\)$/,"");window.open(s.url,"_blank","noopener");toast(`${nm}에서 상품을 열고 공유 → 아카이브를 누르면 이 자리에 들어가요`)});
 /* 바깥 링크: 앱이 깔려 있으면 앱으로 (무신사 · 29CM 등), 없으면 브라우저 */
 if(NTP&&NTP.openLink){const ext=u=>/^https?:\/\//i.test(u||"")&&!u.startsWith(location.origin);
-  const go=u=>NTP.openLink({url:u}).catch(()=>{});
+  /* 웹 주소를 앱이 '지원 링크'로 안 받는 쇼핑앱은 앱을 직접 지정해서 열어요 (확인된 패키지만) */
+  const PKG={"musinsa.com":"com.musinsa.store"};
+  const pkgOf=u=>{try{const h=new URL(u).hostname.replace(/^www\.|^m\./,"");return PKG[h]||""}catch(e){return ""}};
+  const go=u=>NTP.openLink({url:u,pkg:pkgOf(u)}).catch(()=>{});
   document.addEventListener("click",e=>{const a=e.target.closest("a[href]");if(!a||e.defaultPrevented)return;const u=a.href;if(!ext(u))return;e.preventDefault();go(u)},false);
   const _wo=window.open.bind(window);window.open=function(u,t,f){if(ext(String(u||""))){go(String(u));return null}return _wo(u,t,f)}}setTimeout(renderNeed,1500);
 if(typeof saveBR==="function"){const _sb=saveBR;saveBR=function(){const r=_sb.apply(this,arguments);renderNeed();return r};window.saveBR=saveBR}
