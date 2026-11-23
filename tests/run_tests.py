@@ -61,6 +61,7 @@ PAGES = {
     # 코릴라: 주문 제작 문구
     "https://t.test/korilla": '<html><head><meta property="og:title" content="N1_0.1 CXL (Black)"></head><body><p>모든 제품은 주문과 동시에 제작이 되며 현재 주문시 약 18주정도 소요됩니다</p></body></html>',
     # 페이지 안 상품 데이터
+    "https://t.test/nm": '<html><head><script type="application/ld+json">{"@type":"Product","name":"TRIBAL TRACK JACKET - BLACK","offers":{"@type":"Offer","price":"115","priceCurrency":"USD","availability":"https://schema.org/InStock"}}</script></head><body>' + "x" * 300 + '</body></html>',
     "https://t.test/script": '<html><body><script>window.__DATA__={"options":[{"name":"240","soldOut":true},{"name":"245","soldOut":false},{"name":"250","soldOut":false}],"d":"' + "x" * 300 + '"}</script></body></html>',
 }
 
@@ -123,6 +124,8 @@ def run():
           const it={brand:'노매뉴얼'};const r=[window.archiveIsOfficial(it,{shop:'nomanual',url:'https://shop.example.com/p/1'}),window.archiveIsOfficial(it,{shop:'x',url:'https://en.nomanual-official.com/p/1'}),window.archiveIsOfficial(it,{shop:'무신사',url:'https://www.musinsa.com/products/1'})];
           BR.brands=BR.brands.filter(x=>x.id!=='nmt');return r})()""")
         check("공식몰 알아보기: 영어 이름 · 하위 주소 (노매뉴얼)", off, [True, True, False])
+        nmfix = pg.evaluate("""async()=>{const it={id:'nmx',brand:'노매뉴얼',name:'NOMANUAL 노매뉴얼 0 21만',kind:'wish',sellers:[{shop:'nomanual',url:'https://t.test/nm'}]};await window.archiveRefresh(it,true);return it.name}""")
+        check("잘못 들어간 이름 'NOMANUAL 노매뉴얼 0 21만' → 상품 이름", nmfix, "TRIBAL TRACK JACKET - BLACK")
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"

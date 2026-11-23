@@ -214,7 +214,7 @@ function isOfficialSeller(it,s){if(!it||!s||!s.url)return false;if(s.official)re
   try{const o=officialFromBR({ko:it.brand,en:it.brand},true);if(o&&base(new URL(o).hostname)===base(host))return true}catch(e){}
   const rec=typeof BR!=="undefined"?brFind(BR.brands,it.brand||""):null;const names=[it.brand,...((rec&&[rec.name,...(rec.aka||[])])||[])].filter(Boolean).map(brKey);
   if(names.includes(brKey(s.shop||"")))return true;const hb=host.split(".")[0].replace(/[^a-z0-9]/g,"");return b.length>=3&&/^[a-z0-9]+$/.test(b)&&(hb===b||hb===b+"official"||hb==="the"+b)}
-window.archiveIsOfficial=isOfficialSeller;window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
+window.archiveIsOfficial=isOfficialSeller;window.archiveRefresh=(it,q)=>refreshItem(it,q);window.__robotsOk=(t,p)=>{const r={dis:[],allow:[]};let on=false;for(const raw of t.split(/\n/)){const m=raw.replace(/#.*/,"").trim().match(/^([A-Za-z-]+)\s*:\s*(.*)$/);if(!m)continue;const k=m[1].toLowerCase(),v=m[2].trim();if(k==="user-agent"){on=v==="*";continue}if(!on)continue;if(k==="disallow"&&v)r.dis.push(v);if(k==="allow"&&v)r.allow.push(v)}return robotsOk(r,p)};
 function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\\]|\\.)*)'/);if(!m)return null;
   try{const lit=(new Function("return '"+m[1]+"'"))();const j=JSON.parse(lit);const st={};Object.values(j).forEach(o=>{const sp=splitOpt(o.option_value_orginal||o.option_value||o.option_name||"");if(!sp)return;const k=sp.size;
       const selling=(o.is_selling||"T")==="T"&&(o.is_display||"T")!=="F";const useSt=o.use_stock===true||o.use_stock==="T";const n=+o.stock_number;
@@ -348,8 +348,12 @@ async function realFetch(){
 async function refreshItem(it,quiet){
   const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);
       /* 공식몰이 기준: 위시 가격 · 사이즈표를 공식몰 값으로 맞춰요 */
-      if(isOfficialSeller(it,s)&&P.name){const left=String(it.name||"").replace(/\d+(?:\.\d)?\s*[만천]/g," ").replace(/[ⓘ①\d]/g," ").split(/\s+/).filter(w=>w&&![it.brand,...((typeof BR!=="undefined"&&(brFind(BR.brands,it.brand||"")||{}).aka)||[])].some(b=>b&&brKey(b)===brKey(w))).join("");
-        if(left.length<3){it.name=clean(P.name);it.upd=Date.now()}}
+      /* 브랜드 줄이 이름으로 들어간 경우(예: 'NOMANUAL 노매뉴얼 0 21만') → 읽은 상품 이름으로 */
+      if(P.name){const nm=String(it.name||"");let hostW="";try{hostW=new URL(s.url).hostname.replace(/^www\.|^m\./,"").split(".")[0]}catch(e){}
+        const rec=typeof BR!=="undefined"?brFind(BR.brands,it.brand||""):null;const bn=[it.brand,s.shop,hostW,hostW.replace(/-?official$/,""),...((rec&&[rec.name,...(rec.aka||[])])||[])].filter(Boolean).map(brKey);
+        const left=nm.replace(/\d+(?:\.\d)?\s*[만천]/g," ").replace(/[ⓘ①\d]/g," ").split(/\s+/).filter(w=>w&&!bn.includes(brKey(w))).join("");
+        const junk=left.length<3||/\d(?:\.\d)?\s*[만천]\s*$/.test(nm);
+        if(junk&&(isOfficialSeller(it,s)||/\d(?:\.\d)?\s*[만천]\s*$/.test(nm))){it.name=clean(P.name);it.upd=Date.now()}}
       if(isOfficialSeller(it,s)){const fp=fmtPrice(P.price,P.currency);if(fp&&it.kind==="wish"&&it.price!==fp){it.price=fp;it.upd=Date.now()}
         if(P.chart&&P.chart.rows&&P.chart.rows.length&&(!it.chart||it.chartGen||it.chartSrc!=="official")){it.chart=P.chart;it.chartGen=false;it.chartSrc="official";it.upd=Date.now()}}const before={...(s.stock||{})},bp=s.price;
       const wasClosed=s.closed;if(P.mto){s.mto=true;s.closed=!!P.closed}if(s.mto&&!quiet&&wasClosed!==undefined&&wasClosed!==s.closed)toast(`${s.shop}: ${s.closed?"주문이 마감됐어요":"주문이 다시 열렸어요"}`);s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
