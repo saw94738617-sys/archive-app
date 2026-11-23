@@ -1249,7 +1249,7 @@ function toast(t){const el=$("toast");el.textContent=t;el.hidden=false;clearTime
 function today(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,10)}
 let editingId=null,recPhotoCleared=false;
 function openRec(){editingId=null;recPhotoCleared=false;
-  $("recForm").reset();recCat="";recPhotoUrl="";$("recErr").textContent="";
+  $("recForm").reset();recCat="";recPhotoUrl="";catTried="";$("recErr").textContent="";
   document.querySelectorAll("#cats button").forEach(b=>b.setAttribute("aria-pressed","false"));$("subcats").hidden=true;$("subcats").innerHTML="";recSub="";
   const p=$("photo");p.classList.remove("has");p.querySelectorAll("img,.chg").forEach(x=>x.remove());if(typeof renderXPhotos==="function"){recExtra=[];recCands=[];recSel=[];renderXPhotos();renderPicker()}
   $("fDate").value=today();recChart=null;recChartImg="";if(typeof renderChart==="function")renderChart();recSellers=[];renderSellers();$("fetchStatus").textContent="";$("sellersBox").hidden=true;setKind("arc");
@@ -1279,6 +1279,22 @@ $("cats").onclick=e=>{const b=e.target.closest("button");if(!b)return;recCat=b.d
   const c=CATS.find(x=>x.id===recCat);const sc=$("subcats");
   sc.innerHTML=c.subs.map(([sid,sn])=>`<button type="button" data-s="${sid}" aria-pressed="false">${sn}</button>`).join("");sc.hidden=false};
 $("subcats").onclick=e=>{const b=e.target.closest("button");if(!b)return;recSub=b.dataset.s;document.querySelectorAll("#subcats button").forEach(x=>x.setAttribute("aria-pressed",x===b))};
+/* 이름으로 카테고리 · 세부 자동 선택 (링크 · 캡처 · 사진 어느 쪽이든 이름이 채워지면) — 직접 고른 건 안 바꿔요 */
+const CAT_GUESS=[
+ ["shoes",/\bboots?\b|\bsneakers?\b|\bshoes?\b|\bloafers?\b|\bderby\b|\boxfords?\b|\bsandals?\b|\bmules?\b|부츠|스니커|운동화|로퍼|구두|더비|신발|샌들|슬리퍼/i,[["boots",/\bboots?\b|부츠/i],["sneakers",/\bsneakers?\b|스니커|운동화/i],["derby",/\bderby\b|\boxfords?\b|\bloafers?\b|구두|더비|로퍼/i]]],
+ ["outer",/\bcoat\b|balmacaan|trench|overcoat|\bjacket\b|blazer|blouson|parka|anorak|\bvest\b|gilet|cardigan|mustang|shearling|\bdown\b|puffer|코트|자켓|재킷|블레이저|블루종|점퍼|파카|아노락|베스트|조끼|가디건|무스탕|패딩|야상/i,[["coat",/\bcoat\b|balmacaan|trench|overcoat|코트/i],["vest",/\bvest\b|gilet|베스트|조끼/i],["jacket",/\bjacket\b|blazer|blouson|parka|anorak|자켓|재킷|블레이저|블루종|점퍼|파카|아노락/i]]],
+ ["bottom",/\bpants\b|trousers|\bjeans\b|\bdenim\b|chinos?\b|slacks|shorts|skirt|팬츠|바지|청바지|데님|치노|슬랙스|반바지|쇼츠|스커트|치마/i,[["shorts",/shorts|반바지|쇼츠/i],["denim",/\bjeans\b|\bdenim\b|청바지|데님/i],["chino",/chinos?\b|치노/i],["slacks",/slacks|trousers|슬랙스/i]]],
+ ["top",/t-?shirts?\b|\btees?\b|\bshirts?\b|sweatshirt|hoodie|\bknit|sweater|pullover|polo|\btop\b|셔츠|티셔츠|반팔|긴팔|니트|스웨터|맨투맨|후드|스웨트|폴로|블라우스/i,[["tee",/t-?shirts?\b|\btees?\b|티셔츠|반팔|긴팔/i],["sweat",/sweatshirt|hoodie|맨투맨|후드|스웨트/i],["knit",/\bknit|sweater|pullover|니트|스웨터/i],["shirt",/\bshirts?\b|셔츠/i]]],
+ ["acc",/\bbags?\b|tote|backpack|\bcap\b|\bhat\b|beanie|\bbelt\b|wallet|necklace|\bring\b|bracelet|scarf|muffler|gloves?|socks|가방|토트|백팩|모자|캡|비니|벨트|지갑|목걸이|반지|팔찌|스카프|머플러|장갑|양말/i,[["bag",/\bbags?\b|tote|backpack|가방|토트|백팩/i],["hat",/\bcap\b|\bhat\b|beanie|모자|캡|비니/i],["belt",/\bbelt\b|wallet|벨트|지갑/i]]]];
+let catTried="";
+function autoCat(){if(recCat)return;const nm=($("fName").value||"").trim();if(!nm||nm===catTried)return;catTried=nm;
+  const g=CAT_GUESS.find(([id,re])=>CATS.some(c=>c.id===id)&&re.test(nm));if(!g)return;
+  const cb=document.querySelector(`#cats button[data-c="${g[0]}"]`);if(!cb)return;cb.click();
+  let sb=null;for(const [sid,re] of g[2]){sb=document.querySelector(`#subcats button[data-s="${sid}"]`);if(sb&&re.test(nm))break;sb=null}
+  if(!sb)sb=[...document.querySelectorAll("#subcats button[data-s]")].find(b=>{const t=b.textContent.trim();return t.length>=2&&nm.includes(t)})||null;
+  if(sb)sb.click()}
+setInterval(()=>{if(rec.getAttribute("aria-hidden")!=="true")autoCat()},800);
+$("fName").addEventListener("change",autoCat);
 rec.addEventListener("click",e=>{const sb=e.target.closest("[data-seg] button");if(sb)sb.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===sb))});
 $("recPhoto").addEventListener("change",e=>{
   const f0=e.target.files&&e.target.files[0];if(!f0)return;

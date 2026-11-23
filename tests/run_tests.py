@@ -97,6 +97,8 @@ def run():
         check("리노스토어 대응표 'US 8 : 260'", pg.evaluate(f"(()=>{{const P={A}.sizePairsFrom('SIZE(cm) 8 : 260 8 1/2 : 265');return {A}.shoeChart(['8','8.5'],true,P).cols}})()"), ["260", "265"])
         check("옷 사이즈를 신발로 착각 안 함", pg.evaluate(f"{A}.shoeChart(['36','38','40'],false)"), None)
         check("반 사이즈 · cm 표기", pg.evaluate(f"['US 8 1/2','US 8 1/2 (26.5cm)','US 6(24CM)','M','Medium (42)'].map({A}.sizeKey)"), ["8.5", "265", "240", "M", "42"])
+        cats = pg.evaluate("""(()=>{const out=[];for(const n of ['DONEGAL TWEED INVERTED PLEATS BALMACAAN COAT','데님 자켓','와이드 데님 팬츠','그래픽 반팔 티셔츠','코릴라 엔지니어 부츠','울 비니']){openRec();$('fName').value=n;autoCat();out.push(recCat+'/'+recSub)}return out})()""")
+        check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
         check("글로 쓴 사이즈표 (비긴202)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", txt),
