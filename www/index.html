@@ -235,6 +235,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .optcs{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.optc-b{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;border:1.5px solid var(--line,#d9d2c0);background:transparent;color:inherit;font:inherit;font-size:13px}.optc-b i{width:12px;height:12px;border-radius:50%;border:1px solid rgba(127,127,127,.5)}.optc-b[aria-pressed=true]{border-color:#c8622d;background:rgba(200,98,45,.14);font-weight:700}.optc label small{font-weight:400;opacity:.7;margin-left:6px}
 .pst.sz-all{white-space:normal;line-height:1.45}.pst.sz-all b{text-decoration:underline;text-underline-offset:2px}
 .mto-b{font-style:normal;font-weight:700;color:#c8622d;margin-right:4px}.mto-x{border:1px solid currentColor;background:transparent;color:inherit;opacity:.75;border-radius:999px;padding:2px 9px;font:inherit;font-size:11.5px;margin-left:4px}
+.szimgprev,.szimg-wrap{position:relative}.szimg-del{position:absolute;top:14px;right:8px;border:0;border-radius:999px;padding:6px 12px;background:rgba(20,22,30,.82);color:#fff;font:inherit;font-size:12.5px;font-weight:700}
 .szro{border-collapse:collapse;width:100%;font-size:13.5px;min-width:max-content}
 .szro th,.szro td{padding:10px 10px;border-bottom:1px solid #eee7d6;text-align:center;font-family:var(--mono)}
 .szro thead th{background:#efe9da;font-size:12.5px}
@@ -1609,13 +1610,13 @@ const CHART_T={
 function chartFor(c){const t=CHART_T[c]||{cols:["FREE"],rows:["총장"]};return {cols:[...t.cols],rows:t.rows.map(r=>[r,...t.cols.map(()=>"")])}}
 function renderChart(){
   const t=$("szt");if(!t)return;
-  if(!recChart){t.innerHTML="";$("sztNote").hidden=false;$("sztEx").hidden=true;$("sztImgPrev").hidden=!recChartImg;return}
+  if(!recChart){t.innerHTML="";$("sztNote").hidden=false;$("sztEx").hidden=true;$("sztImgPrev").hidden=!recChartImg;$("sztImgPrev").innerHTML=recChartImg?`<img src="${recChartImg}" alt="사이즈표 사진"><button type="button" class="szimg-del" id="sztImgDel">✕ 사진 빼기</button>`:"";return}
   $("sztNote").hidden=true;
   const mis=myCols({c:recCat,chart:recChart}).names.map(n=>recChart.cols.indexOf(n));
   const cls=i=>mis.includes(i)?' class="mine"':"";
   t.innerHTML=`<thead><tr><th>항목</th>${recChart.cols.map((c,i)=>`<th${cls(i)}><button class="x" type="button" data-dc="${i}" aria-label="이 사이즈 빼기">✕</button><input value="${escH(c)}" data-ch="${i}" aria-label="사이즈 이름"></th>`).join("")}</tr></thead>
     <tbody>${recChart.rows.map((r,ri)=>`<tr><td><input value="${escH(r[0])}" data-rl="${ri}" aria-label="항목 이름"></td>${r.slice(1).map((v,ci)=>`<td${cls(ci)}><input value="${escH(v)}" data-r="${ri}" data-c="${ci}" inputmode="decimal" aria-label="${escH(r[0])} ${escH(recChart.cols[ci])}"></td>`).join("")}</tr>`).join("")}</tbody>`;
-  $("sztImgPrev").hidden=!recChartImg;$("sztImgPrev").innerHTML=recChartImg?`<img src="${recChartImg}" alt="사이즈표 사진">`:"";
+  $("sztImgPrev").hidden=!recChartImg;$("sztImgPrev").innerHTML=recChartImg?`<img src="${recChartImg}" alt="사이즈표 사진"><button type="button" class="szimg-del" id="sztImgDel">✕ 사진 빼기</button>`:"";
 }
 $("szt").addEventListener("input",e=>{const x=e.target;if(!recChart)return;
   if(x.dataset.ch!==undefined){recChart.cols[+x.dataset.ch]=x.value}
@@ -1652,7 +1653,7 @@ function chartHTML(it){
       +(mis.length?`<p class="mylegend"><b class="myk">□</b> 내 사이즈 (${escH(mis.map(i=>pre+cols[i]).join(", "))})${my.manual?` · 이 옷에서 직접 고름 <button type="button" class="myreset" data-myreset>설정대로 되돌리기</button>`:my.approx?" · 표의 허리 실측으로 맞춘 값":" · 설정 기준"}</p>`:(cols.length>1&&catSizeKey(it.c)?`<p class="mylegend">내 사이즈와 맞는 칸이 표에 없어요</p>`:""))
       +(cols.length>1?`<p class="mylegend pickhint">사이즈 칸을 누르면 이 옷의 내 사이즈로 정해져요</p>`:"")}
     +(it.chartNote?`<p class="mylegend">${escH(it.chartNote)}</p>`:"");
-  return `<div class="dsec"><h3>사이즈표</h3>${typeof cmpBar==="function"?cmpBar(it):""}${tbl}${it.chartImg?`<img src="${escH(it.chartImg)}" alt="사이즈표 사진" style="width:100%;border-radius:12px;margin-top:8px">`:""}</div>`;
+  return `<div class="dsec"><h3>사이즈표</h3>${typeof cmpBar==="function"?cmpBar(it):""}${tbl}${it.chartImg?`<div class="szimg-wrap"><img src="${escH(it.chartImg)}" alt="사이즈표 사진" style="width:100%;border-radius:12px;margin-top:8px"><button type="button" class="szimg-del" data-delchartimg>✕ 사진 빼기</button></div>`:""}</div>`;
 }
 
 renderChart();

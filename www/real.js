@@ -1411,6 +1411,9 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
+/* 사이즈표 사진 빼기 (기록 화면 · 상세 화면) */
+document.addEventListener("click",e=>{if(e.target.closest("#sztImgDel")){e.preventDefault();recChartImg="";const f=$("sztImg");if(f)f.value="";renderChart();toast("사이즈표 사진을 뺐어요 · 저장하면 반영돼요");return}
+  const b=e.target.closest("[data-delchartimg]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;it.chartImg="";it.upd=Date.now();dtSave(it,"사이즈표 사진을 뺐어요")});
 /* 판매처 '주문 제작으로 표시' · '해제' */
 document.addEventListener("click",e=>{const b=e.target.closest("[data-mto]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;const s=(it.sellers||[]).find(x=>x.url===b.dataset.mto);if(!s)return;
   s.mto=!s.mto;if(!s.mto)s.closed=false;it.upd=Date.now();if(typeof pushWatch==="function")pushWatch();dtSave(it,s.mto?"주문 제작으로 표시했어요":"주문 제작 표시를 풀었어요")});
