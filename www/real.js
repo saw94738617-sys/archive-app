@@ -1138,7 +1138,7 @@ function shotLines(words,H){const W=(words||[]).map(w=>({t:String(w.t||"").trim(
   for(const w of W){const l=L[L.length-1];if(l&&Math.abs(w.cy-l.cy)<Math.min(w.h,l.ws[0].h)*0.55){l.ws.push(w);l.cy=(l.cy*(l.ws.length-1)+w.cy)/l.ws.length}else L.push({cy:w.cy,ws:[w]})}
   return L.map(l=>{l.ws.sort((a,b)=>a.x-b.x);const hs=l.ws.map(w=>w.h).sort((a,b)=>a-b);
     return {t:l.ws.map(w=>w.t).join(" ").replace(/\s+/g," ").trim(),y:Math.min(...l.ws.map(w=>w.y)),b:Math.max(...l.ws.map(w=>w.y+w.h)),h:hs[Math.floor(hs.length/2)],x:l.ws[0].x}}).filter(l=>l.y>H*0.035)}
-const SHOT_NOISE=/원|%|후기|쿠폰|적립|구매|장바구니|주차|D-\d|종료|할인|LV\.|스페셜|배송|무료|리뷰|좋아요|^\s*AI\b|\d+\s*\/\s*\d+|^[\d\s.,:]+$/i;
+const SHOT_NOISE=/원|%|후기|쿠폰|적립|구매|장바구니|주차|D-\d|종료|할인|LV\.|스페셜|배송|무료|리뷰|좋아요|^\s*AI\b|\d+\s*\/\s*\d+|^[\d\s.,:]+$|\d(?:\.\d)?\s*[만천]\s*$|[ⓘ①]/i;
 function readShot(words,Wd,H){const L=shotLines(words,H);const out={brand:"",title:"",name:"",price:null,crop:null,lines:L.map(l=>l.t)};
   const pr=L.map(l=>{const m=l.t.replace(/\s/g,"").match(/(\d{1,3}(?:,\d{3})+)원/);return m?{l,v:+m[1].replace(/,/g,"")}:null}).filter(Boolean);
   if(pr.length){pr.sort((a,b)=>b.l.h-a.l.h||a.l.y-b.l.y);out.price=pr[0].v}
