@@ -1574,6 +1574,18 @@ function renderNeed(){try{const home=$("home");if(!home||typeof BR==="undefined"
   if(!el){el=document.createElement("button");el.type="button";el.id="needBar";el.className="needbar";const hero=home.querySelector(".hero");if(hero)hero.after(el);else home.prepend(el);el.onclick=()=>{BR.tab="brand";openBR()}}
   el.innerHTML=`<b>확인 필요</b> ${[cand?`공식몰 후보 ${cand}곳 맞는지 확인`:"",none?`공식몰 없는 브랜드 ${none}곳`:""].filter(Boolean).join(" · ")} <span>›</span>`}catch(e){}}
 window.renderNeed=renderNeed;
+/* 가격 화폐(₩ ¥ $)를 바꾸면 금액도 그날 환율로 바꿔요 (공개 환율 · 하루 한 번 받아 저장) */
+const CUR_CODE={"₩":"KRW","¥":"JPY","$":"USD"},FX_FALLBACK={KRW:1,JPY:0.107,USD:0.00071};
+async function fxRates(){try{const c=JSON.parse(localStorage.getItem("archive-fx")||"null");if(c&&Date.now()-c.at<12*3600*1000)return c}catch(e){}
+  try{const j=JSON.parse(await getText("https://api.frankfurter.app/latest?from=KRW&to=USD,JPY"));if(j&&j.rates&&j.rates.USD&&j.rates.JPY){const c={at:Date.now(),date:j.date,r:{KRW:1,USD:j.rates.USD,JPY:j.rates.JPY}};try{localStorage.setItem("archive-fx",JSON.stringify(c))}catch(e){}return c}}catch(e){}
+  return {at:0,date:"",r:FX_FALLBACK,rough:true}}
+window.archiveFx={rates:fxRates,conv:(v,from,to,r)=>{const k=v/r[from]*r[to];return to==="KRW"?Math.round(k/100)*100:Math.round(k)}};
+{let prev="₩";const seg=$("cur");if(seg){
+  seg.addEventListener("pointerdown",()=>{const p=seg.querySelector('button[aria-pressed="true"]');prev=p?p.textContent:"₩"},true);
+  seg.addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;const to=b.textContent,from=prev;prev=to;if(from===to)return;
+    const inp=$("fPrice");const v=+String(inp.value||"").replace(/[^\d]/g,"");if(!v)return;
+    const fx=await fxRates();const n=window.archiveFx.conv(v,CUR_CODE[from],CUR_CODE[to],fx.r);inp.value=n.toLocaleString("ko-KR");inp.classList.add("flash");setTimeout(()=>inp.classList.remove("flash"),900);
+    toast(`${from}${v.toLocaleString("ko-KR")} → ${to}${n.toLocaleString("ko-KR")} · ${fx.rough?"대략 환율(인터넷 연결 확인)":"환율 "+fx.date}`)})}}
 /* 문제 보내기: 못 읽은 사이트와 이유만 모아 복사 (개인 기록 · 사진 · 계정 정보 없음) */
 (()=>{const dr=$("drawer");const set=$("openSet");if(!dr||!set||$("sendIssues"))return;const b=document.createElement("button");b.className="mi";b.type="button";b.id="sendIssues";b.innerHTML="문제 보내기 <span>↗</span>";set.after(b);
   b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const fails=L.filter(x=>x.k==="fail"||x.k==="err");

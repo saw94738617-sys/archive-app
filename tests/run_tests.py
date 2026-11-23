@@ -112,6 +112,8 @@ def run():
         pd = pg.evaluate("""async()=>{const L=await window.archiveOfficial.searchShop('https://pd.test','쿠반 오픈카라 린넨');const nm='[세미오버] 쿠반 오픈카라 린넨 셔츠 (네이비)';
           let best=null;for(const c of L){const sc=window.archiveOfficial.simName(nm,c.name);if(sc>=0.45&&(!best||sc>best.sc))best={...c,sc}}return best&&best.url}""")
         check("여러 단어로 못 찾는 몰(프로드셔츠): 핵심 단어로 다시 찾기", pd, "https://pd.test/product/x/291/category/65/display/1/")
+        fx = pg.evaluate("""(()=>{const r={KRW:1,USD:0.0007,JPY:0.1};return [window.archiveFx.conv(115,'USD','KRW',r),window.archiveFx.conv(150000,'KRW','JPY',r),window.archiveFx.conv(150000,'KRW','USD',r)]})()""")
+        check("화폐 바꾸면 금액 환산", fx, [164300, 15000, 105])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
