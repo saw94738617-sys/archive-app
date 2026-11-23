@@ -1321,6 +1321,10 @@ function renderSellers(){
 }
 function addSeller(url){
   if(recSellers.some(s=>s.url===url))return false;
+  /* 캡처로 남긴 'OO (검색)' 자리에 진짜 상품 링크가 오면 바꿔 끼워요 */
+  {const nm=shopOf(url),host=(()=>{try{return new URL(url).hostname.replace(/^www\.|^m\./,"")}catch(e){return ""}})();
+   const i=recSellers.findIndex(s=>/\(검색\)$/.test(s.shop||"")&&(s.shop.replace(/\s*\(검색\)$/,"")===nm||(()=>{try{return new URL(s.url).hostname.replace(/^www\.|^m\./,"")===host}catch(e){return false}})()));
+   if(i>=0){const old=recSellers[i];recSellers[i]={url,shop:nm,price:old.price||"",star:!!old.star};renderSellers();return true}}
   recSellers.push({url,shop:shopOf(url),price:"",star:recKind==="arc"&&!recSellers.some(s=>s.star)});
   if(recKind==="arc"){const st=recSellers.find(s=>s.star);if(st&&!$("fShop").value)$("fShop").value=st.shop}
   renderSellers();return true;

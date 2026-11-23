@@ -286,12 +286,13 @@ async function realFetch(){
     if(!noFetch(v)&&NATIVE){const o=originOf(v),st0=shopStore();let t=st0.terms[o];
       if(!t){$("fetchStatus").innerHTML='<span class="spin"></span>처음 보는 쇼핑몰이에요 · 약관 확인 중…';try{t=await checkTerms(o)}catch(e){}}
       if(t&&t.result==="ban"){addSeller(v);const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
-        $("fetchStatus").innerHTML=`⚠ 이 쇼핑몰은 약관에서 자동 수집을 금지해서 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 추가해 주세요 <button type="button" class="altshop" data-why="${escH(o)}">이유 보기</button>`;$("fLink").value="";return}
+        $("fetchStatus").innerHTML=`이 쇼핑몰은 약관에서 자동 수집을 금지해서 링크${nm?"와 이름":""}만 넣었어요 · ${nm?"공식몰에서 사진 · 재고 · 사이즈표 찾는 중…":"이름을 넣으면 공식몰을 찾아요"} <button type="button" class="altshop" data-why="${escH(o)}">이유 보기</button>`;$("fLink").value="";
+        if(nm){setTimeout(()=>toOfficial(raw,nm),0)}return}
       termsNote=t&&t.result==="clear"?"약관 확인됨 · ":t&&t.result==="unknown"?"약관 페이지는 못 찾았어요 · ":""}
     if(noFetch(v)){addSeller(v);const s0=recSellers.find(x=>x.url===v);if(s0){s0.shop=noFetchShop(v)||s0.shop;renderSellers()}
       {const nb=noFetchBrand(v);if(nb&&!$("fBrand").value)$("fBrand").value=nb}
       const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
-      $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
+      $("fetchStatus").textContent=nm&&NATIVE?`${noFetchShop(v)||"이 쇼핑몰"} 링크와 이름을 넣었어요 · 공식몰에서 사진 · 재고 · 사이즈표 찾는 중…`:`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
       $("fLink").value="";
       if(nm&&NATIVE){setTimeout(()=>toOfficial(raw,nm),0)}
       else{askOfficial()}
