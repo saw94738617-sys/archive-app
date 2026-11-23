@@ -1475,9 +1475,12 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 약관 확인 중…`;let t=shopStore().terms[o];if(!t){try{t=await checkTerms(o)}catch(e){}}
   if(t&&t.result==="ban"){st.textContent=`${b.ko||b.en} 공식몰은 약관에서 자동 수집을 금지해서 가져오지 않았어요 · 링크와 이름만 저장했어요`;return}
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰에서 같은 상품 찾는 중…`;
-  const qs=[shortQuery(b.name,b.ko)||normN(b.name),...(raw.match(/[A-Za-z][A-Za-z0-9 \-]{6,}/g)||[]).map(x=>x.trim())].filter(Boolean);let best=null;
-  for(const q of qs){let list=[];try{list=await searchShop(o,q)}catch(e){}for(const c of list){const sc=Math.max(simName(b.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}if(best)break}
-  if(!best){st.textContent=`${b.ko||b.en} 공식몰에서 같은 상품을 못 찾았어요 · 무신사 링크와 이름만 저장했어요`;return}
+  const base=String(b.name||"").replace(/\[.*?\]|\(.*?\)/g," ").replace(/\s+/g," ").trim();const tk=toks(base).filter(w=>!toks(b.ko||"").includes(w));
+  const qs=[...new Set([shortQuery(b.name,b.ko)||normN(b.name),base,tk.slice(0,2).join(" "),tk.join(""),...(raw.match(/[A-Za-z][A-Za-z0-9 \-]{6,}/g)||[]).map(x=>x.trim())].filter(x=>x&&x.length>=2))];let best=null;const tried=[];
+  for(const q of qs){let list=[];try{list=await searchShop(o,q)}catch(e){}tried.push(q+":"+list.length);for(const c of list){const sc=Math.max(simName(b.name,c.name),simName(q,c.name));if(sc>=0.45&&(!best||sc>best.score))best={...c,score:sc}}if(best)break}
+  if(!best){devLog({k:"fail",host:new URL(o).hostname,msg:"공식몰 검색: "+tried.join(" / ")});
+    st.innerHTML=`${escH(b.ko||b.en)} 공식몰 검색에서 같은 상품을 못 찾았어요.<br><button type="button" class="altgo" id="offSearchWeb" style="margin-top:6px">🔎 공식몰에서 직접 찾기</button><br><small>찾은 상품 페이지 주소를 복사해 위 링크 칸에 붙여넣고 '가져오기'를 누르면 공식몰 사진 · 재고 · 사이즈표를 가져와요</small>`;
+    const bt=$("offSearchWeb");if(bt)bt.onclick=()=>window.open(o+"/product/search.html?keyword="+encodeURIComponent(qs[0]),"_blank","noopener");return}
   $("fLink").value=best.url;await realFetch();
   const cur=$("fetchStatus").textContent;$("fetchStatus").textContent=`공식몰(${new URL(o).hostname.replace(/^www\./,"")})에서 가져왔어요 · `+cur.replace(/^✓\s*/,"")}
 window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
