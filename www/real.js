@@ -116,7 +116,8 @@ function findChart(doc){
     /* 사이즈별 블록형: '5' 한 칸 줄 다음에 '가슴 단면 | 59' 줄들 */
     {let cur=null;const by={},labels=[];for(const r of rows){const cells=r.filter(Boolean);
       if(cells.length===1&&SZ.test(cells[0])){cur=cells[0].toUpperCase();by[cur]=by[cur]||{};continue}
-      if(cur&&cells.length===2&&/\d/.test(cells[1])&&!SZ.test(cells[0])){const l=cells[0].replace(/\(cm\)/i,"").trim();if(!labels.includes(l))labels.push(l);by[cur][l]=cells[1].replace(/cm/i,"").trim()}}
+      const last=cells[cells.length-1],head=cells.slice(0,-1);
+      if(cur&&cells.length>=2&&/^[\d.,]+(cm)?$/i.test(last)&&head.every(x=>!/^[\d.,]+$/.test(x))&&!SZ.test(head[0])){const l=head.join(" ").replace(/\(cm\)/i,"").trim();if(!labels.includes(l))labels.push(l);by[cur][l]=last.replace(/cm/i,"").trim()}}
       const cols=Object.keys(by).filter(k=>Object.keys(by[k]).length);
       if(cols.length>=1&&labels.length&&labels.some(l=>LB.test(l)))return {cols,rows:labels.map(l=>[l,...cols.map(c=>by[c][l]||"")])}}
     /* 가로형: 첫 줄이 사이즈 */
@@ -1108,7 +1109,19 @@ function readShot(words,Wd,H){const L=shotLines(words,H);const out={brand:"",tit
   return out}
 function cropData(url,c){return new Promise(ok=>{const im=new Image();im.onload=()=>{try{const cv=document.createElement("canvas");const k=Math.min(1,1600/c.w);cv.width=Math.round(c.w*k);cv.height=Math.round(c.h*k);
   cv.getContext("2d").drawImage(im,c.x,c.y,c.w,c.h,0,0,cv.width,cv.height);ok(cv.toDataURL("image/jpeg",0.9))}catch(e){ok(url)}};im.onerror=()=>ok(url);im.src=url})}
-async function fromShot(dataUrl){if(!rec.classList.contains("on")){openRec();setKind("wish")}
+/* 캡처가 사이즈표면: 지금 열린 옷(기록 화면 · 상세 화면)의 사이즈표를 채워요 */
+const LB_SHOT=/(총장|기장|어깨|가슴|소매|화장|허리|엉덩이|힙|허벅지|밑위|밑단|발볼|발길이|굽|length|chest|shoulder|sleeve|waist|hip|thigh|rise|hem|inseam|着丈|肩幅|身幅|袖丈)/i;
+async function chartFromShot(dataUrl){const st=OCR?await OCR.read({data:dataUrl}):null;if(!st)return null;
+  const text=(st.text||"")+" "+(st.words||[]).map(w=>w.t).join(" ");const labs=(text.match(new RegExp(LB_SHOT.source,"gi"))||[]).length;
+  if(labs<2)return {r:st};const c=chartFromRows(wordsToRows(st.words));return {r:st,chart:c&&c.rows.length&&c.cols.length?c:null}}
+async function fromShot(dataUrl){
+  if(OCR){const dtOpen=typeof dt!=="undefined"&&dt.classList.contains("on");const recOpen=rec.classList.contains("on");
+    if(dtOpen||recOpen){let res=null;try{res=await chartFromShot(dataUrl)}catch(e){}
+      if(res&&res.chart){
+        if(recOpen){recChart=res.chart;recChartImg=dataUrl;renderChart();const ex=$("sztEx");if(ex)ex.hidden=true;toast(`캡처에서 사이즈표를 읽었어요 · ${res.chart.cols.join(" · ")}`);return}
+        const it=ITEMS.find(x=>x.id===dtId);if(it){it.chart=res.chart;it.chartImg=dataUrl;it.chartGen=false;it.upd=Date.now();dtSave(it,`캡처에서 사이즈표를 읽었어요 · ${res.chart.cols.join(" · ")}`);return}}
+      if(res&&res.r&&!res.chart&&LB_SHOT.test(res.r.text||"")&&dtOpen){toast("사이즈표 모양을 못 읽었어요 · 표 부분만 보이게 다시 캡처해 주세요");return}}}
+  if(!rec.classList.contains("on")){openRec();setKind("wish")}
   const st=$("fetchStatus");
   if(!OCR){toast("캡처 글자 읽기는 폰 앱에서 돼요");return}
   st.innerHTML='<span class="spin"></span>캡처에서 글자 읽는 중…';
