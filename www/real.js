@@ -103,11 +103,25 @@ function meta(doc,...names){for(const n of names){const el=doc.querySelector(`me
 
 function findChart(doc){
   const SZ=/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|[0-9]{2}\/[0-9]{2}|US ?\d+(\.5)?|EU ?\d+|JP ?\d+)$/i,LB=/(총장|기장|어깨|가슴|소매|허리|엉덩이|힙|허벅지|밑위|밑단|발|길이|너비|폭|높이|width|length|chest|shoulder|sleeve|waist|hip|thigh|rise|hem|inseam|着丈|総丈|肩幅|身幅|袖丈|ウエスト|ヒップ|股上|股下|ワタリ|裾幅|足長)/i;
+  /* 사이즈마다 표가 따로 있는 쇼핑몰: '5' 글자 + [가슴 단면|59][총장|71] 표, '6' + 표 … → 하나로 합쳐요 */
+  {const kv=[];const near=t=>{const c=t.querySelector("caption");if(c&&SZ.test(clean(c.textContent)))return clean(c.textContent);
+      let el=t;for(let up=0;up<3&&el;up++){let p=el.previousElementSibling;for(let i=0;i<4&&p;i++,p=p.previousElementSibling){const x=clean(p.textContent);if(x&&x.length<=12){const m=x.match(/^(?:SIZE|사이즈)?\s*[:.]?\s*(\S+)$/i);if(m&&SZ.test(m[1]))return m[1]}if(x)break}el=el.parentElement}return ""};
+    for(const t of doc.querySelectorAll("table")){const rows=[...t.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>clean(td.textContent)).filter(Boolean));
+      let sz="";const body=[];for(const r of rows){if(r.length===1&&SZ.test(r[0])&&!sz){sz=r[0];continue}if(r.length===2&&!SZ.test(r[0])&&/\d/.test(r[1]))body.push(r)}
+      if(body.length>=2&&body.some(r=>LB.test(r[0])&&!/\d{2,}/.test(r[0]))){sz=sz||near(t);if(sz)kv.push({sz:sz.toUpperCase(),body})}}
+    if(kv.length>=2){const labels=[];kv.forEach(k=>k.body.forEach(r=>{const l=r[0].replace(/\(cm\)/i,"").trim();if(!labels.includes(l))labels.push(l)}));
+      const cols=kv.map(k=>k.sz);return {cols,rows:labels.map(l=>[l,...kv.map(k=>{const r=k.body.find(r=>r[0].replace(/\(cm\)/i,"").trim()===l);return r?r[1].replace(/cm/i,"").trim():""})])}}}
   for(const t of doc.querySelectorAll("table")){
     const rows=[...t.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>clean(td.textContent)));if(rows.length<2)continue;
+    /* 사이즈별 블록형: '5' 한 칸 줄 다음에 '가슴 단면 | 59' 줄들 */
+    {let cur=null;const by={},labels=[];for(const r of rows){const cells=r.filter(Boolean);
+      if(cells.length===1&&SZ.test(cells[0])){cur=cells[0].toUpperCase();by[cur]=by[cur]||{};continue}
+      if(cur&&cells.length===2&&/\d/.test(cells[1])&&!SZ.test(cells[0])){const l=cells[0].replace(/\(cm\)/i,"").trim();if(!labels.includes(l))labels.push(l);by[cur][l]=cells[1].replace(/cm/i,"").trim()}}
+      const cols=Object.keys(by).filter(k=>Object.keys(by[k]).length);
+      if(cols.length>=1&&labels.length&&labels.some(l=>LB.test(l)))return {cols,rows:labels.map(l=>[l,...cols.map(c=>by[c][l]||"")])}}
     /* 가로형: 첫 줄이 사이즈 */
     const h=rows[0];const cols=h.slice(1).filter(Boolean);
-    if(cols.length>=1&&cols.every(c=>SZ.test(c))&&rows.slice(1).some(r=>LB.test(r[0]||""))){
+    if(cols.length>=1&&!(LB.test(h[0]||"")&&cols.length<2)&&cols.every(c=>SZ.test(c))&&rows.slice(1).some(r=>LB.test(r[0]||""))){
       const body=rows.slice(1).filter(r=>r[0]&&r.slice(1).some(v=>/\d/.test(v))).map(r=>[r[0].replace(/\(cm\)/i,"").trim(),...cols.map((_,i)=>(r[i+1]||"").replace(/cm/i,"").trim())]);
       if(body.length)return {cols:cols.map(c=>c.toUpperCase()),rows:body}}
     /* 세로형: 첫 칸이 사이즈 */
@@ -1184,7 +1198,7 @@ async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=s
 window.archiveChartForItem=(it,w)=>chartForItem(it,null,w);
 async function fillChart(it,say,why){const r=await chartForItem(it,say,why);if(!r)return false;it.chart=r.chart;if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
 if(typeof chartHTML==="function"){const _ch=chartHTML;chartHTML=function(it){let h=_ch(it);const need=!hasChart(it)||it.chartGen||isGenChart(it.chart);
-  if(!need)return h;const btn=`<button type="button" class="altgo" id="dtChart" style="margin-top:8px">📏 사이즈표 ${hasChart(it)?"실측으로 다시 ":""}가져오기</button><p class="note" id="dtChartSt" hidden></p>`;
+  if(!need)return h.replace(/<\/div>$/,`<button type="button" class="altshop" id="dtChart" style="margin-top:8px">📏 사이즈표 다시 가져오기</button><p class="note" id="dtChartSt" hidden></p></div>`);const btn=`<button type="button" class="altgo" id="dtChart" style="margin-top:8px">📏 사이즈표 ${hasChart(it)?"실측으로 다시 ":""}가져오기</button><p class="note" id="dtChartSt" hidden></p>`;
   if(!h)return `<div class="dsec"><h3>사이즈표</h3>${btn}</div>`;return h.replace(/<\/div>$/,btn+"</div>")};window.chartHTML=chartHTML}
 document.addEventListener("click",async e=>{const b=e.target.closest("#dtChart");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;
   if(!NATIVE){toast("사이즈표 가져오기는 폰 앱에서 돼요");return}
