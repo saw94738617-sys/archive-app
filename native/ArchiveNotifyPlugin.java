@@ -3,6 +3,9 @@ package com.archive.myclothes;
 import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ActivityNotFoundException;
+import android.util.Base64;
+import androidx.core.content.FileProvider;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.PowerManager;
@@ -158,5 +161,31 @@ public class ArchiveNotifyPlugin extends Plugin {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(i);
         } catch (Exception ignored) {}
+    }
+
+    /** 캡처에서 자른 상품 사진을 Google 렌즈(구글 앱)로 넘겨요. 결과에서 공식몰을 고르는 건 사용자가 해요. */
+    @PluginMethod
+    public void lens(PluginCall call) {
+        try {
+            String data = call.getString("data", "");
+            int comma = data.indexOf(',');
+            byte[] bytes = Base64.decode(comma >= 0 ? data.substring(comma + 1) : data, Base64.DEFAULT);
+            java.io.File f = new java.io.File(getContext().getCacheDir(), "lens.jpg");
+            try (java.io.FileOutputStream fo = new java.io.FileOutputStream(f)) { fo.write(bytes); }
+            Uri u = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("image/jpeg");
+            i.putExtra(Intent.EXTRA_STREAM, u);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            JSObject r = new JSObject();
+            try {
+                Intent g = new Intent(i); g.setPackage("com.google.android.googlequicksearchbox");
+                getContext().startActivity(g); r.put("via", "google");
+            } catch (ActivityNotFoundException e) {
+                Intent ch = Intent.createChooser(i, "사진으로 검색할 앱 고르기"); ch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(ch); r.put("via", "chooser");
+            }
+            call.resolve(r);
+        } catch (Exception e) { call.reject("렌즈로 넘기지 못했어요: " + e.getMessage()); }
     }
 }

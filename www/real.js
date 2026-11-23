@@ -300,7 +300,7 @@ async function realFetch(){
     const urls=P.images.slice(0,9);const got=[];
     await Promise.all(urls.map(async(u,i)=>{try{got[i]=await imageAsDataURL(u,1600)}catch(e){}}));
     recCands=got.filter(Boolean);
-    if(recCands.length){if(!recPhotoUrl&&!$("photo").classList.contains("has")){recSel=[0];applyPick()}else recSel=[];renderPicker();fill.push("사진 "+recCands.length+"장")}
+    if(recCands.length){const _shotPh=window.__shotPhoto&&recPhotoUrl===window.__shotPhoto;if(_shotPh||(!recPhotoUrl&&!$("photo").classList.contains("has"))){recSel=[0];applyPick();window.__shotPhoto=null}else recSel=[];renderPicker();fill.push("사진 "+recCands.length+"장")}
     if(P.stock)fill.push("재고");
     $("fetchStatus").textContent=(fill.length?"✓ "+termsNote+fill.join(" · ")+" 가져왔어요":"페이지에서 읽을 수 있는 정보가 없었어요 · 직접 적어주세요");
     $("fLink").value="";
@@ -1237,10 +1237,12 @@ async function fromShot(dataUrl){
     try{await toOfficial(S.title,null,{ko:S.brand,en:en||(S.ens||[])[0]||"",ens:S.ens||[],name:S.name})}catch(e){}}
   /* 캡처한 앱에서 다시 찾을 수 있게 그 앱의 검색 링크를 판매처에 남겨요 (링크만 만들고 앱이 접속하지는 않아요) */
   shotQ=[S.brand,S.name].filter(Boolean).join(" ").trim();shotPrice=S.price;setShotSrc(SRC);
-  if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker()}
+  window.__shotImg=shot;if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker();window.__shotPhoto=recPhotoUrl}
   const after=st.textContent;const okOff=/^공식몰\(/.test(after);
   st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^(무신사는 )?링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요");
-  srcPicker()}
+  srcPicker();
+  if(!okOff&&shot&&NTP&&NTP.lens){const b=document.createElement("button");b.type="button";b.className="altgo";b.id="lensBtn";b.style.marginTop="8px";b.textContent="🔍 Google 렌즈로 공식몰 찾기";
+    const tip=document.createElement("small");tip.className="sharegot";tip.textContent="렌즈 결과에서 공식몰을 누르고 공유 → 아카이브를 하면 이 기록에 공식몰 사진 · 재고 · 사이즈표가 채워져요";st.appendChild(b);st.appendChild(tip)}}
 window.archiveShot={read:readShot,from:fromShot,ens:(w,W,H)=>readShot(w,W,H).ens,detect:t=>{const a=detectSrc(t);return a?a.id:null}};
 /* ---------- 27) 사이즈표 자동 채우기: 상세 이미지 글자 읽기 · 신발은 옵션 사이즈로 나라별 표 ---------- */
 const SHOE_RE=/부츠|부트|boots?\b|shoes?\b|sneakers?|스니커|로퍼|loafer|구두|더비|derby|옥스퍼드|oxford|샌들|sandal|슬리퍼|뮬|워커|engineer|엔지니어|chukka|처커|モンキー|ブーツ|シューズ|vaudeville/i;
@@ -1536,6 +1538,8 @@ document.addEventListener("click",async e=>{
   const a=e.target.closest("#brFindAll");if(a){if(!NATIVE){toast("공식몰 찾기는 폰 앱에서 돼요");return}const list=BR.brands.filter(x=>!(x.links||[]).length);a.disabled=true;let ok=0;
     for(let i=0;i<list.length;i++){a.textContent=`찾는 중… ${i+1}/${list.length}`;try{if(await findBrandOfficial(list[i]))ok++}catch(err){}}
     renderBR();toast(`공식몰 ${ok}개를 찾았어요 (${list.length}개 중) · 못 찾은 곳은 '웹에서 찾기'로 넣어 주세요`)}});
+document.addEventListener("click",async e=>{if(!e.target.closest("#lensBtn"))return;const img=window.__shotImg;if(!img||!NTP||!NTP.lens)return;
+  try{const r=await NTP.lens({data:img});if(r&&r.via==="chooser")toast("구글 앱이 없어서 사진 검색 앱을 골라 주세요")}catch(err){toast("렌즈를 열지 못했어요")}});
 /* 사이즈표 사진 빼기 (기록 화면 · 상세 화면) */
 document.addEventListener("click",e=>{if(e.target.closest("#sztImgDel")){e.preventDefault();recChartImg="";const f=$("sztImg");if(f)f.value="";renderChart();toast("사이즈표 사진을 뺐어요 · 저장하면 반영돼요");return}
   const b=e.target.closest("[data-delchartimg]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;it.chartImg="";it.upd=Date.now();dtSave(it,"사이즈표 사진을 뺐어요")});
