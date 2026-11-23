@@ -999,10 +999,10 @@ async function resolveLink(u){u=canon(u);let host="";try{host=new URL(u).hostnam
   return u}
 /* 약관에서 자동 수집을 금지한 사이트: 앱이 페이지에 접속하지 않아요 (링크 · 공유 문구의 이름만 저장) */
 /* 약관 · robots로 자동 접근을 막는 큰 쇼핑 앱 · 플랫폼: 앱이 접속하지 않고 링크 · 공유 문구 · 캡처만 써요 */
-const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net|kream\.co\.kr|fruitsfamily\.com|ssfshop\.com|shein\.com|shein\.co\.kr|naver\.com|naver\.me|daangn\.com|pinterest\.com|pinterest\.co\.kr|pin\.it|cosmos\.so|nike\.com|adidas\.co\.kr|adidas\.com|zara\.com|uniqlo\.com|topten10mall\.com|theshopyohjiyamamoto\.jp)$/i;
-const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM","kream.co.kr":"KREAM","fruitsfamily.com":"FruitsFamily","ssfshop.com":"SSF SHOP","shein.com":"SHEIN","shein.co.kr":"SHEIN","naver.com":"네이버","naver.me":"네이버","daangn.com":"당근","pinterest.com":"Pinterest","pinterest.co.kr":"Pinterest","pin.it":"Pinterest","cosmos.so":"Cosmos","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"탑텐","theshopyohjiyamamoto.jp":"THE SHOP"};
+const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net|kream\.co\.kr|fruitsfamily\.com|ssfshop\.com|shein\.com|shein\.co\.kr|naver\.com|naver\.me|daangn\.com|pinterest\.com|pinterest\.co\.kr|pin\.it|cosmos\.so|nike\.com|adidas\.co\.kr|adidas\.com|zara\.com|uniqlo\.com|topten10mall\.com|theshopyohjiyamamoto\.jp|a-bly\.com|zigzag\.kr|queenit\.kr|4910\.kr|wconcept\.co\.kr|brandi\.co\.kr|posty\.kr|sivillage\.com|thehandsome\.com|lfmall\.co\.kr|kolonmall\.com|hm\.com|cos\.com|mango\.com|spao\.com)$/i;
+const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM","kream.co.kr":"KREAM","fruitsfamily.com":"FruitsFamily","ssfshop.com":"SSF SHOP","shein.com":"SHEIN","shein.co.kr":"SHEIN","naver.com":"네이버","naver.me":"네이버","daangn.com":"당근","pinterest.com":"Pinterest","pinterest.co.kr":"Pinterest","pin.it":"Pinterest","cosmos.so":"Cosmos","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"탑텐","theshopyohjiyamamoto.jp":"THE SHOP","a-bly.com":"에이블리","zigzag.kr":"지그재그","queenit.kr":"퀸잇","4910.kr":"4910","wconcept.co.kr":"W컨셉","brandi.co.kr":"브랜디","posty.kr":"포스티","sivillage.com":"SI빌리지","thehandsome.com":"더한섬닷컴","lfmall.co.kr":"LF몰","kolonmall.com":"코오롱몰","hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO"};
 /* 브랜드 자체 앱 · 공식몰이면 브랜드를 바로 채워요 */
-const NOFETCH_BRAND={"nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"TOPTEN10"};
+const NOFETCH_BRAND={"hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"TOPTEN10"};
 function noFetchBrand(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_BRAND)if(h===k||h.endsWith("."+k))return NOFETCH_BRAND[k]}catch(e){}return ""}
 function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
 function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
@@ -1156,6 +1156,21 @@ const SRC_APPS=[
   {id:"croquet",name:"크로켓",re:/크로켓|croquet/i,url:q=>gSite("croquet.co.kr",q)},
   {id:"daangn",name:"당근",re:/당근|채팅하기|끌올|daangn/i,url:q=>gSite("daangn.com",q)},
   {id:"pinterest",name:"Pinterest",re:/pinterest|핀터레스트/i,url:q=>"https://www.pinterest.com/search/pins/?q="+encodeURIComponent(q)},
+  {id:"ably",name:"에이블리",re:/에이블리|\bably\b/i,url:q=>gSite("a-bly.com",q)},
+  {id:"zigzag",name:"지그재그",re:/지그재그|zigzag/i,url:q=>gSite("zigzag.kr",q)},
+  {id:"queenit",name:"퀸잇",re:/퀸잇|queenit/i,url:q=>gSite("queenit.kr",q)},
+  {id:"4910",name:"4910",re:/사구일공|\b4910\b(?![,.]?\d)/i,url:q=>gSite("4910.kr",q)},
+  {id:"wconcept",name:"W컨셉",re:/W ?컨셉|w ?concept/i,url:q=>gSite("wconcept.co.kr",q)},
+  {id:"brandi",name:"브랜디",re:/브랜디|brandi/i,url:q=>gSite("brandi.co.kr",q)},
+  {id:"posty",name:"포스티",re:/포스티|posty/i,url:q=>gSite("posty.kr",q)},
+  {id:"sivillage",name:"SI빌리지",re:/SI ?빌리지|S\.?I\.? ?VILLAGE/i,url:q=>gSite("sivillage.com",q)},
+  {id:"handsome",name:"더한섬닷컴",re:/한섬|handsome/i,url:q=>gSite("thehandsome.com",q)},
+  {id:"lfmall",name:"LF몰",re:/LF ?몰|lf ?mall/i,url:q=>gSite("lfmall.co.kr",q)},
+  {id:"kolon",name:"코오롱몰",re:/코오롱|kolon/i,url:q=>gSite("kolonmall.com",q)},
+  {id:"hm",name:"H&M",brand:"H&M",re:/H ?& ?M\b|에이치앤엠/i,url:q=>gSite("hm.com",q)},
+  {id:"cos",name:"COS",brand:"COS",re:/\bCOS\b(?! ?\d)/,url:q=>gSite("cos.com",q)},
+  {id:"mango",name:"MANGO",brand:"MANGO",re:/\bMANGO\b|망고/,url:q=>gSite("mango.com",q)},
+  {id:"spao",name:"SPAO",brand:"SPAO",re:/스파오|\bSPAO\b/i,url:q=>gSite("spao.com",q)},
   {id:"cosmos",name:"Cosmos",re:/cosmos\.so|\bcosmos\b/i,url:q=>gSite("cosmos.so",q)}];
 function detectSrc(text){return SRC_APPS.find(a=>a.re.test(text||""))||null}
 let shotQ="",shotPrice=null,shotSrc=null;
