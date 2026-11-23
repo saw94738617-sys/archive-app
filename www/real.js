@@ -267,6 +267,7 @@ async function realFetch(){
         $("fetchStatus").innerHTML=`⚠ 이 쇼핑몰은 약관에서 자동 수집을 금지해서 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 추가해 주세요 <button type="button" class="altshop" data-why="${escH(o)}">이유 보기</button>`;$("fLink").value="";return}
       termsNote=t&&t.result==="clear"?"약관 확인됨 · ":t&&t.result==="unknown"?"약관 페이지는 못 찾았어요 · ":""}
     if(noFetch(v)){addSeller(v);const s0=recSellers.find(x=>x.url===v);if(s0){s0.shop=noFetchShop(v)||s0.shop;renderSellers()}
+      {const nb=noFetchBrand(v);if(nb&&!$("fBrand").value)$("fBrand").value=nb}
       const nm=nameFromShare(raw);if(nm&&!$("fName").value){$("fName").value=nm;$("fName").classList.add("flash")}
       $("fetchStatus").textContent=`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
       $("fLink").value="";
@@ -997,8 +998,12 @@ async function resolveLink(u){u=canon(u);let host="";try{host=new URL(u).hostnam
   const og=body.match(/property=["']og:url["'][^>]*content=["']([^"']+)/i);if(og)return canon(og[1]);
   return u}
 /* 약관에서 자동 수집을 금지한 사이트: 앱이 페이지에 접속하지 않아요 (링크 · 공유 문구의 이름만 저장) */
-const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net)$/i;
-const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM"};
+/* 약관 · robots로 자동 접근을 막는 큰 쇼핑 앱 · 플랫폼: 앱이 접속하지 않고 링크 · 공유 문구 · 캡처만 써요 */
+const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net|kream\.co\.kr|fruitsfamily\.com|ssfshop\.com|shein\.com|shein\.co\.kr|naver\.com|naver\.me|daangn\.com|pinterest\.com|pinterest\.co\.kr|pin\.it|cosmos\.so|nike\.com|adidas\.co\.kr|adidas\.com|zara\.com|uniqlo\.com|topten10mall\.com|theshopyohjiyamamoto\.jp)$/i;
+const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM","kream.co.kr":"KREAM","fruitsfamily.com":"FruitsFamily","ssfshop.com":"SSF SHOP","shein.com":"SHEIN","shein.co.kr":"SHEIN","naver.com":"네이버","naver.me":"네이버","daangn.com":"당근","pinterest.com":"Pinterest","pinterest.co.kr":"Pinterest","pin.it":"Pinterest","cosmos.so":"Cosmos","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"탑텐","theshopyohjiyamamoto.jp":"THE SHOP"};
+/* 브랜드 자체 앱 · 공식몰이면 브랜드를 바로 채워요 */
+const NOFETCH_BRAND={"nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"TOPTEN10"};
+function noFetchBrand(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_BRAND)if(h===k||h.endsWith("."+k))return NOFETCH_BRAND[k]}catch(e){}return ""}
 function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
 function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
 function nameFromShare(t){t=String(t||"");
@@ -1195,7 +1200,7 @@ async function fromShot(dataUrl){
   shotQ=[S.brand,S.name].filter(Boolean).join(" ").trim();shotPrice=S.price;setShotSrc(SRC);
   if(!recCands.length&&!$("photo").classList.contains("has")){recCands=[shot];recSel=[0];applyPick();renderPicker()}
   const after=st.textContent;const okOff=/^공식몰\(/.test(after);
-  st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^무신사는 링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요");
+  st.textContent=head+(okOff?" · "+after:S.brand&&S.name?" · 공식몰에서는 못 가져와서 캡처 사진을 넣었어요"+(after&&!/찾는 중|확인 중/.test(after)?" ("+after.replace(/^(무신사는 )?링크와 이름만 넣었어요 · /,"").replace(/ · 사진은 캡처해서 추가해 주세요/,"").replace(/ · 링크와 이름만 저장했어요/,"")+")":""):" · 캡처 사진을 넣었어요");
   srcPicker()}
 window.archiveShot={read:readShot,from:fromShot,detect:t=>{const a=detectSrc(t);return a?a.id:null}};
 /* ---------- 27) 사이즈표 자동 채우기: 상세 이미지 글자 읽기 · 신발은 옵션 사이즈로 나라별 표 ---------- */
@@ -1424,8 +1429,9 @@ async function toOfficial(raw,nm,preset){const st=$("fetchStatus");const b=prese
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 찾는 중…`;
   let o=officialFromBR(b);if(!o)o=await guessOfficial(b);
   for(const en of (b.ens||[])){if(o)break;if(!en||brKey(en)===brKey(b.en||""))continue;o=officialFromBR({en})||await guessOfficial({en,ko:b.ko})}
+  if(o&&noFetch(o)){st.textContent=`${b.ko||b.en} 공식몰도 약관상 앱이 읽을 수 없어요 · 상품 화면을 캡처해서 공유하면 이름 · 가격 · 사진을 넣어요`;return}
   if(!o)o=await askOfficialUrl(b);
-  if(!o||noFetch(o)){st.textContent=`무신사는 링크와 이름만 넣었어요 · ${b.ko||b.en} 공식몰을 못 찾았어요 · 사진은 캡처해서 추가해 주세요`;return}
+  if(!o||noFetch(o)){st.textContent=`링크와 이름만 넣었어요 · ${b.ko||b.en} 공식몰을 못 찾았어요 · 사진은 캡처해서 추가해 주세요`;return}
   rememberOfficial(b,o);
   st.innerHTML=`<span class="spin"></span>${escH(b.ko||b.en)} 공식몰 약관 확인 중…`;let t=shopStore().terms[o];if(!t){try{t=await checkTerms(o)}catch(e){}}
   if(t&&t.result==="ban"){st.textContent=`${b.ko||b.en} 공식몰은 약관에서 자동 수집을 금지해서 가져오지 않았어요 · 링크와 이름만 저장했어요`;return}
@@ -1439,7 +1445,7 @@ window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
 
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
 function askOfficial(){const st=$("fetchStatus");
-  st.innerHTML=`무신사 링크만으로는 상품 이름을 알 수 없어요 (약관상 무신사 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br>💡 상품 화면을 <b>캡처해서 공유 → 아카이브</b>로 보내면 브랜드 · 이름 · 가격을 자동으로 읽어요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
+  const _sn=noFetchShop(($("fLink")||{}).value||"")||(recSellers.map(x=>noFetchShop(x.url)).filter(Boolean).pop())||"이 쇼핑몰";st.innerHTML=`${_sn} 링크만으로는 상품 이름을 알 수 없어요 (약관상 ${_sn} 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br>💡 상품 화면을 <b>캡처해서 공유 → 아카이브</b>로 보내면 브랜드 · 이름 · 가격을 자동으로 읽어요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
   setTimeout(()=>{if(!$("fBrand").value)$("fBrand").focus();else if(!$("fName").value)$("fName").focus()},100)}
 document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;const br=$("fBrand").value.trim(),nm=$("fName").value.trim();
   if(!br||!nm){toast("브랜드와 이름을 먼저 적어 주세요");(!br?$("fBrand"):$("fName")).focus();return}
