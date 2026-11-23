@@ -340,7 +340,10 @@ async function realFetch(){
 
 /* 재고 다시 확인 */
 async function refreshItem(it,quiet){
-  const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);const before={...(s.stock||{})},bp=s.price;
+  const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);
+      /* 공식몰이 기준: 위시 가격 · 사이즈표를 공식몰 값으로 맞춰요 */
+      if(isOfficialSeller(it,s)){const fp=fmtPrice(P.price,P.currency);if(fp&&it.kind==="wish"&&it.price!==fp){it.price=fp;it.upd=Date.now()}
+        if(P.chart&&P.chart.rows&&P.chart.rows.length&&(!it.chart||it.chartGen||it.chartSrc!=="official")){it.chart=P.chart;it.chartGen=false;it.chartSrc="official";it.upd=Date.now()}}const before={...(s.stock||{})},bp=s.price;
       const wasClosed=s.closed;if(P.mto){s.mto=true;s.closed=!!P.closed}if(s.mto&&!quiet&&wasClosed!==undefined&&wasClosed!==s.closed)toast(`${s.shop}: ${s.closed?"주문이 마감됐어요":"주문이 다시 열렸어요"}`);s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
     catch(e){res.push({s,ok:false})}}
   if(!quiet){const ok=res.filter(r=>r.ok).length;toast(ok?`${ok}곳 확인했어요 · ${stamp()}`:"판매처 페이지를 읽지 못했어요")}
@@ -1319,7 +1322,7 @@ const isGenChart=c=>!!(c&&c.rows&&c.rows[0]&&c.rows[0][0]==="발 길이(mm)"&&c.
 const hasChart=it=>!!(it.chart&&it.chart.rows&&it.chart.rows.some(r=>r.slice(1).some(Boolean)));
 async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=shopStore();const tried=new Set();
   const okUrl2=u=>/^https?:/.test(u||"")&&!noFetch(u)&&!((st.terms[originOf(u)]||{}).result==="ban");
-  const urls=(it.sellers||[]).map(x=>x.url).filter(okUrl2);
+  const urls=(it.sellers||[]).slice().sort((a,b)=>(isOfficialSeller(it,b)?1:0)-(isOfficialSeller(it,a)?1:0)).map(x=>x.url).filter(okUrl2);
   /* 무신사 링크뿐이면: 등록된 공식몰에서 같은 상품 찾기 */
   const all=(it.sellers||[]).map(x=>x.url).filter(Boolean);if(!all.length)why.push("판매처 링크가 없어요");else if(!urls.length)why.push("판매처가 무신사처럼 앱이 읽을 수 없는 곳뿐이에요");
   if(!urls.length&&it.brand&&it.name){const o=officialFromBR({ko:it.brand,en:it.brand});if(!o)why.push(`${it.brand} 공식몰이 아직 등록되지 않았어요`);
@@ -1331,7 +1334,7 @@ async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=s
   for(const u of urls){if(tried.has(u))continue;tried.add(u);say("쇼핑몰 페이지 읽는 중…");let P;try{P=await readProduct(u)}catch(e){why.push(`${originOf(u).replace(/^https?:\/\/(www\.)?/,"")} 페이지를 못 읽었어요`);continue}
     if(P.stock)Object.keys(P.stock).forEach(k=>stockKeys.add(k));
     if(P.sizePairs){pairs=pairs||P.sizePairs;Object.keys(P.sizePairs).forEach(k=>stockKeys.add(k))}
-    if(P.chart)return {chart:P.chart,how:"쇼핑몰 사이즈표"};
+    if(P.chart)return {chart:P.chart,how:(isOfficialSeller(it,(it.sellers||[]).find(x=>x.url===u)||{})?"공식몰":"쇼핑몰")+" 사이즈표",official:isOfficialSeller(it,(it.sellers||[]).find(x=>x.url===u)||{})};
     if(P.detail&&P.detail.length&&OCR){say("상세 이미지에서 사이즈표 찾는 중…");try{const r=await chartFromDetail(P.detail);if(r)return {chart:r.chart,img:r.img,how:"상세 이미지"}}catch(e){}}}
   if(it.chartImg&&OCR){say("저장된 사이즈표 사진 읽는 중…");try{const r=await OCR.read({data:it.chartImg});const c=chartFromRows(wordsToRows(r.words));if(c&&c.rows.length)return {chart:c,how:"사이즈표 사진"}}catch(e){}}
   const isShoe=it.c==="shoes"||SHOE_RE.test(it.name||"")||!!pairs;
@@ -1342,7 +1345,7 @@ async function chartForItem(it,say,why){say=say||(()=>{});why=why||[];const st=s
     gen=shoeChart(K.slice(a,b));if(gen)return {chart:gen,how:"일반 신발 환산표"+(why.length?" ("+why[0]+")":""),gen:true}}
   return null}
 window.archiveChartForItem=(it,w)=>chartForItem(it,null,w);
-async function fillChart(it,say,why){const r=await chartForItem(it,say,why);if(!r)return false;it.chart=r.chart;if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
+async function fillChart(it,say,why){const r=await chartForItem(it,say,why);if(!r)return false;it.chart=r.chart;it.chartSrc=r.official?"official":"";if(r.img&&!it.chartImg)it.chartImg=r.img;it.chartGen=!!r.gen;it.upd=Date.now();return r.how}
 if(typeof chartHTML==="function"){const _ch=chartHTML;chartHTML=function(it){let h=_ch(it);const need=!hasChart(it)||it.chartGen||isGenChart(it.chart);
   if(!need)return h.replace(/<\/div>$/,`<button type="button" class="altshop" id="dtChart" style="margin-top:8px">📏 사이즈표 다시 가져오기</button><p class="note" id="dtChartSt" hidden></p></div>`);const btn=`<button type="button" class="altgo" id="dtChart" style="margin-top:8px">📏 사이즈표 ${hasChart(it)?"실측으로 다시 ":""}가져오기</button><p class="note" id="dtChartSt" hidden></p>`;
   if(!h)return `<div class="dsec"><h3>사이즈표</h3>${btn}</div>`;return h.replace(/<\/div>$/,btn+"</div>")};window.chartHTML=chartHTML}
