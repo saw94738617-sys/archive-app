@@ -568,6 +568,7 @@ body{margin:0;background:var(--outside);color:var(--indigo);font-family:var(--bo
 .brcard .bdel{border:0;background:none;color:#c2b9a3;font-size:13px;padding:2px 4px}
 .brlinks{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .brlinks a{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--cream);color:var(--indigo);text-decoration:none;font-size:13.5px;font-weight:700}
+.brl{display:flex;gap:6px;align-items:stretch}.brl a{flex:1;min-width:0}.brl-del{flex:none;width:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:14px}
 .brlinks a em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
 .brlinks .nolink{padding:10px 12px;border-radius:10px;border:1.5px dashed #d6cdb8;font-size:12.5px;color:var(--muted)}
 .brtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -1768,7 +1769,7 @@ function renderBR(){
   $("brBody").innerHTML=`<div class="brtabs"><button type="button" data-t="brand" aria-pressed="${BR.tab==="brand"}">브랜드<span>${BR.brands.length}</span></button><button type="button" data-t="shop" aria-pressed="${BR.tab==="shop"}">편집샵<span>${BR.shops.length}</span></button></div>`
    +list.map(x=>{const mine=BR.tab==="brand"?itemsOfBrand(x):itemsOfShop(x);const rel=BR.tab==="brand"?x.shops:x.brands;
     return `<div class="brcard" data-id="${x.id}"><div class="bh"><div><b>${escH(x.name)}</b>${x.sub?`<small>${escH(x.sub)}</small>`:""}</div><button class="bdel" type="button" data-del aria-label="${escH(x.name)} 지우기">✕</button></div>
-      <div class="brlinks">${x.links.length?x.links.map(l=>`<a href="${escH(l.url)}" target="_blank" rel="noopener noreferrer"><span>${escH(l.label)} ↗</span><em>${escH(l.url.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,""))}</em></a>`).join(""):'<div class="nolink">아직 링크가 없어요</div>'}</div>
+      <div class="brlinks">${x.links.length?x.links.map((l,li)=>`<div class="brl"><a href="${escH(l.url)}" target="_blank" rel="noopener noreferrer"><span>${escH(l.label)} ↗</span><em>${escH(l.url.replace(/^https?:\/\/(www\.)?/,"").replace(/\/$/,""))}</em></a><button type="button" class="brl-del" data-brldel="${li}" aria-label="이 링크 빼기">✕</button></div>`).join(""):'<div class="nolink">아직 링크가 없어요</div>'}</div>
       <div class="braddl"><input type="url" inputmode="url" placeholder="링크 추가 (https://)" data-newlink aria-label="링크 추가"><button type="button" data-addlink>추가</button></div>
       ${rel.length?`<div class="brtags">${rel.map(r=>`<span>${BR.tab==="brand"?"파는 곳 · ":"취급 · "}${escH(r)}</span>`).join("")}</div>`:""}
       <button class="brmine" type="button" data-mine ${mine.length?"":"disabled"}>${mine.length?`내 옷 ${mine.length}개 보기`:"아직 기록한 옷이 없어요"}</button></div>`}).join("")
