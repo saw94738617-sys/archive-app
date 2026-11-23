@@ -295,6 +295,7 @@ async function realFetch(){
       $("fetchStatus").textContent=nm&&NATIVE?`${noFetchShop(v)||"이 쇼핑몰"} 링크와 이름을 넣었어요 · 공식몰에서 사진 · 재고 · 사이즈표 찾는 중…`:`${noFetchShop(v)||"이 쇼핑몰"} 약관에서 앱이 자동으로 정보를 가져가는 걸 금지해서, 링크${nm?"와 이름":""}만 넣었어요 · 사진은 캡처해서 직접 추가해 주세요`;
       $("fLink").value="";
       if(nm&&NATIVE){setTimeout(()=>toOfficial(raw,nm),0)}
+      else if($("fName").value.trim()){$("fetchStatus").textContent=`✓ ${noFetchShop(v)||"판매처"} 상품 링크를 이 기록에 붙였어요`}
       else{askOfficial()}
       return}
     const P=await readProduct(v);
@@ -1510,7 +1511,7 @@ window.archiveOfficial={splitBrand,guessOfficial,toOfficial};
 
 /* 무신사 링크만 붙여넣었을 때: 브랜드 · 이름을 적으면 공식몰에서 찾기 */
 function askOfficial(){const st=$("fetchStatus");
-  const _sn=noFetchShop(($("fLink")||{}).value||"")||(recSellers.map(x=>noFetchShop(x.url)).filter(Boolean).pop())||"이 쇼핑몰";st.innerHTML=`${_sn} 링크만으로는 상품 이름을 알 수 없어요 (약관상 ${_sn} 페이지를 열 수 없어요).<br><b>브랜드와 이름</b>을 적고 아래 버튼을 누르면 브랜드 공식몰에서 찾아 줘요. 브랜드는 영어로 적으면 더 잘 찾아요.<br>💡 상품 화면을 <b>캡처해서 공유 → 아카이브</b>로 보내면 브랜드 · 이름 · 가격을 자동으로 읽어요.<br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
+  const _sn=noFetchShop(($("fLink")||{}).value||"")||(recSellers.map(x=>noFetchShop(x.url)).filter(Boolean).pop())||"이 쇼핑몰";st.innerHTML=`<b>${_sn}가 링크만 보내서 상품 이름을 몰라요.</b><br>이 화면 그대로 두고 ${_sn}에서 상품 화면을 <b>캡처 → 공유 → 아카이브</b>하면 이 기록에 합쳐서 공식몰을 찾아요.<br><small>브랜드와 이름을 직접 적고 아래 버튼을 눌러도 돼요.</small><br><button type="button" class="altgo" id="offGo" style="margin-top:8px">🔎 공식몰에서 찾기</button>`;
   setTimeout(()=>{if(!$("fBrand").value)$("fBrand").focus();else if(!$("fName").value)$("fName").focus()},100)}
 document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;const br=$("fBrand").value.trim(),nm=$("fName").value.trim();
   if(!br||!nm){toast("브랜드와 이름을 먼저 적어 주세요");(!br?$("fBrand"):$("fName")).focus();return}
@@ -1561,6 +1562,9 @@ function renderNeed(){try{const home=$("home");if(!home||typeof BR==="undefined"
   if(!el){el=document.createElement("button");el.type="button";el.id="needBar";el.className="needbar";const hero=home.querySelector(".hero");if(hero)hero.after(el);else home.prepend(el);el.onclick=()=>{BR.tab="brand";openBR()}}
   el.innerHTML=`<b>확인 필요</b> ${[cand?`공식몰 후보 ${cand}곳 맞는지 확인`:"",none?`공식몰 없는 브랜드 ${none}곳`:""].filter(Boolean).join(" · ")} <span>›</span>`}catch(e){}}
 window.renderNeed=renderNeed;
+/* 캡처로 넣은 'OO (검색)': 그 앱에서 검색 화면을 열고, 사용자가 상품을 골라 공유하면 진짜 링크로 바뀌어요 */
+document.addEventListener("click",e=>{const b=e.target.closest("[data-linkfix]");if(!b)return;e.preventDefault();const s=recSellers[+b.dataset.linkfix];if(!s)return;
+  const nm=s.shop.replace(/\s*\(검색\)$/,"");window.open(s.url,"_blank","noopener");toast(`${nm}에서 상품을 열고 공유 → 아카이브를 누르면 이 자리에 들어가요`)});
 /* 바깥 링크: 앱이 깔려 있으면 앱으로 (무신사 · 29CM 등), 없으면 브라우저 */
 if(NTP&&NTP.openLink){const ext=u=>/^https?:\/\//i.test(u||"")&&!u.startsWith(location.origin);
   const go=u=>NTP.openLink({url:u}).catch(()=>{});
