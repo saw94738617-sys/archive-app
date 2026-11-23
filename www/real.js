@@ -999,10 +999,10 @@ async function resolveLink(u){u=canon(u);let host="";try{host=new URL(u).hostnam
   return u}
 /* 약관에서 자동 수집을 금지한 사이트: 앱이 페이지에 접속하지 않아요 (링크 · 공유 문구의 이름만 저장) */
 /* 약관 · robots로 자동 접근을 막는 큰 쇼핑 앱 · 플랫폼: 앱이 접속하지 않고 링크 · 공유 문구 · 캡처만 써요 */
-const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net|kream\.co\.kr|fruitsfamily\.com|ssfshop\.com|shein\.com|shein\.co\.kr|naver\.com|naver\.me|daangn\.com|pinterest\.com|pinterest\.co\.kr|pin\.it|cosmos\.so|nike\.com|adidas\.co\.kr|adidas\.com|zara\.com|uniqlo\.com|topten10mall\.com|theshopyohjiyamamoto\.jp|a-bly\.com|zigzag\.kr|queenit\.kr|4910\.kr|wconcept\.co\.kr|brandi\.co\.kr|posty\.kr|sivillage\.com|thehandsome\.com|lfmall\.co\.kr|kolonmall\.com|hm\.com|cos\.com|mango\.com|spao\.com)$/i;
-const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM","kream.co.kr":"KREAM","fruitsfamily.com":"FruitsFamily","ssfshop.com":"SSF SHOP","shein.com":"SHEIN","shein.co.kr":"SHEIN","naver.com":"네이버","naver.me":"네이버","daangn.com":"당근","pinterest.com":"Pinterest","pinterest.co.kr":"Pinterest","pin.it":"Pinterest","cosmos.so":"Cosmos","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"탑텐","theshopyohjiyamamoto.jp":"THE SHOP","a-bly.com":"에이블리","zigzag.kr":"지그재그","queenit.kr":"퀸잇","4910.kr":"4910","wconcept.co.kr":"W컨셉","brandi.co.kr":"브랜디","posty.kr":"포스티","sivillage.com":"SI빌리지","thehandsome.com":"더한섬닷컴","lfmall.co.kr":"LF몰","kolonmall.com":"코오롱몰","hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO"};
+const NOFETCH=/(^|\.)(musinsa\.com|29cm\.co\.kr|msscdn\.net|kream\.co\.kr|fruitsfamily\.com|ssfshop\.com|shein\.com|shein\.co\.kr|naver\.com|naver\.me|daangn\.com|pinterest\.com|pinterest\.co\.kr|pin\.it|cosmos\.so|nike\.com|adidas\.co\.kr|adidas\.com|zara\.com|uniqlo\.com|topten10mall\.com|theshopyohjiyamamoto\.jp|a-bly\.com|zigzag\.kr|queenit\.kr|4910\.kr|wconcept\.co\.kr|brandi\.co\.kr|posty\.kr|sivillage\.com|thehandsome\.com|lfmall\.co\.kr|kolonmall\.com|hm\.com|cos\.com|mango\.com|spao\.com|oliveyoung\.co\.kr|hwahae\.co\.kr|kurly\.com|chicor\.com|amoremall\.com|innisfree\.com|daisomall\.co\.kr)$/i;
+const NOFETCH_NAME={"musinsa.com":"무신사","29cm.co.kr":"29CM","kream.co.kr":"KREAM","fruitsfamily.com":"FruitsFamily","ssfshop.com":"SSF SHOP","shein.com":"SHEIN","shein.co.kr":"SHEIN","naver.com":"네이버","naver.me":"네이버","daangn.com":"당근","pinterest.com":"Pinterest","pinterest.co.kr":"Pinterest","pin.it":"Pinterest","cosmos.so":"Cosmos","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"탑텐","theshopyohjiyamamoto.jp":"THE SHOP","a-bly.com":"에이블리","zigzag.kr":"지그재그","queenit.kr":"퀸잇","4910.kr":"4910","wconcept.co.kr":"W컨셉","brandi.co.kr":"브랜디","posty.kr":"포스티","sivillage.com":"SI빌리지","thehandsome.com":"더한섬닷컴","lfmall.co.kr":"LF몰","kolonmall.com":"코오롱몰","hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO","oliveyoung.co.kr":"올리브영","hwahae.co.kr":"화해","kurly.com":"컬리","chicor.com":"시코르","amoremall.com":"아모레몰","innisfree.com":"이니스프리","daisomall.co.kr":"다이소몰"};
 /* 브랜드 자체 앱 · 공식몰이면 브랜드를 바로 채워요 */
-const NOFETCH_BRAND={"hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"TOPTEN10"};
+const NOFETCH_BRAND={"innisfree.com":"innisfree","hm.com":"H&M","cos.com":"COS","mango.com":"MANGO","spao.com":"SPAO","nike.com":"Nike","adidas.co.kr":"adidas","adidas.com":"adidas","zara.com":"ZARA","uniqlo.com":"UNIQLO","topten10mall.com":"TOPTEN10"};
 function noFetchBrand(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_BRAND)if(h===k||h.endsWith("."+k))return NOFETCH_BRAND[k]}catch(e){}return ""}
 function noFetch(u){try{return NOFETCH.test(new URL(u).hostname)}catch(e){return false}}
 function noFetchShop(u){try{const h=new URL(u).hostname;for(const k in NOFETCH_NAME)if(h===k||h.endsWith("."+k))return NOFETCH_NAME[k]}catch(e){}return ""}
@@ -1171,6 +1171,13 @@ const SRC_APPS=[
   {id:"cos",name:"COS",brand:"COS",re:/\bCOS\b(?! ?\d)/,url:q=>gSite("cos.com",q)},
   {id:"mango",name:"MANGO",brand:"MANGO",re:/\bMANGO\b|망고/,url:q=>gSite("mango.com",q)},
   {id:"spao",name:"SPAO",brand:"SPAO",re:/스파오|\bSPAO\b/i,url:q=>gSite("spao.com",q)},
+  {id:"oliveyoung",name:"올리브영",re:/올리브 ?영|olive ?young/i,url:q=>gSite("oliveyoung.co.kr",q)},
+  {id:"hwahae",name:"화해",re:/화해|hwahae/i,url:q=>gSite("hwahae.co.kr",q)},
+  {id:"kurly",name:"컬리",re:/뷰티 ?컬리|마켓 ?컬리|컬리|kurly/i,url:q=>gSite("kurly.com",q)},
+  {id:"chicor",name:"시코르",re:/시코르|chicor/i,url:q=>gSite("chicor.com",q)},
+  {id:"amore",name:"아모레몰",re:/아모레 ?몰|아모레퍼시픽|amore ?mall/i,url:q=>gSite("amoremall.com",q)},
+  {id:"innisfree",name:"이니스프리",brand:"innisfree",re:/이니스프리|innisfree/i,url:q=>gSite("innisfree.com",q)},
+  {id:"daiso",name:"다이소몰",re:/다이소|daiso/i,url:q=>gSite("daisomall.co.kr",q)},
   {id:"cosmos",name:"Cosmos",re:/cosmos\.so|\bcosmos\b/i,url:q=>gSite("cosmos.so",q)}];
 function detectSrc(text){return SRC_APPS.find(a=>a.re.test(text||""))||null}
 let shotQ="",shotPrice=null,shotSrc=null;
