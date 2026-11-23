@@ -188,4 +188,29 @@ public class ArchiveNotifyPlugin extends Plugin {
             call.resolve(r);
         } catch (Exception e) { call.reject("렌즈로 넘기지 못했어요: " + e.getMessage()); }
     }
+
+    /** 링크 열기: 그 링크를 받는 앱(무신사 등)이 깔려 있으면 앱으로, 없으면 브라우저로 */
+    @PluginMethod
+    public void openLink(PluginCall call) {
+        String url = call.getString("url", "");
+        if (!url.startsWith("http")) { call.reject("링크가 아니에요"); return; }
+        Uri u = Uri.parse(url);
+        JSObject r = new JSObject();
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                Intent app = new Intent(Intent.ACTION_VIEW, u);
+                app.addCategory(Intent.CATEGORY_BROWSABLE);
+                app.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+                getContext().startActivity(app);
+                r.put("via", "app"); call.resolve(r); return;
+            }
+        } catch (ActivityNotFoundException e) { /* 앱 없음 → 브라우저 */ }
+        try {
+            Intent b = new Intent(Intent.ACTION_VIEW, u);
+            b.addCategory(Intent.CATEGORY_BROWSABLE);
+            b.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(b);
+            r.put("via", "browser"); call.resolve(r);
+        } catch (Exception e) { call.reject("링크를 열지 못했어요"); }
+    }
 }

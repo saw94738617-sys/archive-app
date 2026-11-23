@@ -1559,7 +1559,12 @@ function renderNeed(){try{const home=$("home");if(!home||typeof BR==="undefined"
   if(!cand&&!none){if(el)el.remove();return}
   if(!el){el=document.createElement("button");el.type="button";el.id="needBar";el.className="needbar";const hero=home.querySelector(".hero");if(hero)hero.after(el);else home.prepend(el);el.onclick=()=>{BR.tab="brand";openBR()}}
   el.innerHTML=`<b>확인 필요</b> ${[cand?`공식몰 후보 ${cand}곳 맞는지 확인`:"",none?`공식몰 없는 브랜드 ${none}곳`:""].filter(Boolean).join(" · ")} <span>›</span>`}catch(e){}}
-window.renderNeed=renderNeed;setTimeout(renderNeed,1500);
+window.renderNeed=renderNeed;
+/* 바깥 링크: 앱이 깔려 있으면 앱으로 (무신사 · 29CM 등), 없으면 브라우저 */
+if(NTP&&NTP.openLink){const ext=u=>/^https?:\/\//i.test(u||"")&&!u.startsWith(location.origin);
+  const go=u=>NTP.openLink({url:u}).catch(()=>{});
+  document.addEventListener("click",e=>{const a=e.target.closest("a[href]");if(!a||e.defaultPrevented)return;const u=a.href;if(!ext(u))return;e.preventDefault();go(u)},false);
+  const _wo=window.open.bind(window);window.open=function(u,t,f){if(ext(String(u||""))){go(String(u));return null}return _wo(u,t,f)}}setTimeout(renderNeed,1500);
 if(typeof saveBR==="function"){const _sb=saveBR;saveBR=function(){const r=_sb.apply(this,arguments);renderNeed();return r};window.saveBR=saveBR}
 function brEn(x){const all=[x.name,...(x.aka||[])].filter(Boolean);return all.find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n))||""}
 async function findBrandOfficial(x){const en=brEn(x);if(!en)return "";const o=await guessOfficial({en,ko:x.name});if(o&&!noFetch(o)){const y=rememberOfficial({ko:x.name,en},o,true);if(y)await verifyCand(y,o);return o}return ""}
