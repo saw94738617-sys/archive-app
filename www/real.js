@@ -176,10 +176,14 @@ function cafe24Stock(html){const m=html.match(/option_stock_data\s*=\s*'((?:[^'\
       const v=!selling?"out":(!useSt||noAuto||unknownN)?"in":(n>0?"in":"out");st[k]=st[k]==="in"?"in":v});
     return Object.keys(st).length?st:null}catch(e){return null}}
 
+/* 쇼피파이 옵션 중 사이즈 고르기: 'US 8 1/2 (26.5cm)' 같은 신발 사이즈 포함, '환불 불가' 같은 안내 옵션은 빼요 */
+function pickSzOpt(opts){const isSz=o=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|US ?\d+(\.5)?)$/i.test(clean(o))||/\(\d{2}(\.\d)?\s*cm\)|^US ?\d{1,2}(\s*1\/2|\.5)?\b/i.test(o);
+  const note=o=>/환불|교환|불가|안내|notice|refund|final sale/i.test(o);const col=o=>/^(black|white|navy|brown|grey|gray|beige|olive|khaki|ivory|cream|indigo|blue|red|green|블랙|화이트|네이비|브라운|그레이|베이지|올리브|카키)/i.test(clean(o));
+  return opts.find(isSz)||opts.find(o=>!note(o)&&!col(o))||null}
 async function shopifyData(url,html){if(!/cdn\.shopify\.com|Shopify\.theme|shopify-section/i.test(html))return null;
   try{const u=new URL(url);const m=u.pathname.match(/\/products\/[^/?#]+/);if(!m)return null;const j=JSON.parse(await getText(u.origin+m[0]+".js"));
     const cur=(html.match(/Shopify\.currency\s*=\s*\{[^}]*"active"\s*:\s*"([A-Z]{3})"/)||[])[1]||meta(new DOMParser().parseFromString(html,"text/html"),"og:price:currency","product:price:currency")||"";
-    const st={};(j.variants||[]).forEach(v=>{const opts=[v.option1,v.option2,v.option3].filter(Boolean);const sz=opts.find(o=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|US ?\d+(\.5)?)$/i.test(clean(o)))||opts[opts.length-1]||v.title;const k=sizeKey(sz);st[k]=st[k]==="in"?"in":(v.available?"in":"out")});
+    const st={};(j.variants||[]).forEach(v=>{const opts=[v.option1,v.option2,v.option3].filter(Boolean);const sz=pickSzOpt(opts)||v.title;const k=sizeKey(sz);st[k]=st[k]==="in"?"in":(v.available?"in":"out")});
     const dec=cur==="JPY"||cur==="KRW"?1:100;
     const by={};const isSz=o=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|\d{1,3}(\.\d)?|US ?\d+(\.5)?)$/i.test(clean(o))||/\(\d{2}(\.\d)?cm\)/i.test(o);
     (j.variants||[]).forEach(v=>{const opts=[v.option1,v.option2,v.option3].filter(Boolean);const sz=opts.find(isSz);const col=opts.filter(o=>o!==sz).join(" / ");if(!sz||!col)return;const k=sizeKey(sz);(by[col]=by[col]||{})[k]=by[col][k]==="in"?"in":(v.available?"in":"out")});
@@ -1441,6 +1445,10 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
+/* 목록 제목(위시리스트 등)이 줄바꿈되지 않게 칸에 맞춰 글자 크기를 줄여요 */
+function fitTitle(){const n=$("catName");if(!n)return;n.style.fontSize="";let fs=parseFloat(getComputedStyle(n).fontSize)||32;let k=0;
+  while(n.scrollWidth>n.clientWidth+1&&fs>18&&k++<20){fs-=1.5;n.style.fontSize=fs+"px"}}
+{const n=$("catName");if(n){new MutationObserver(()=>requestAnimationFrame(fitTitle)).observe(n,{childList:true,characterData:true,subtree:true});window.addEventListener("resize",()=>requestAnimationFrame(fitTitle));setTimeout(fitTitle,500)}}
 /* 사이즈표 사진 빼기 (기록 화면 · 상세 화면) */
 document.addEventListener("click",e=>{if(e.target.closest("#sztImgDel")){e.preventDefault();recChartImg="";const f=$("sztImg");if(f)f.value="";renderChart();toast("사이즈표 사진을 뺐어요 · 저장하면 반영돼요");return}
   const b=e.target.closest("[data-delchartimg]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;it.chartImg="";it.upd=Date.now();dtSave(it,"사이즈표 사진을 뺐어요")});
