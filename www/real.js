@@ -95,7 +95,7 @@ async function imageAsDataURL(url,max){const b=await getImageBlob(url);let s=b;t
 const absUrl=(u,base)=>{try{return new URL(u,base).href}catch(e){return ""}};
 const clean=s=>String(s||"").replace(/\s+/g," ").trim();
 const CUR={KRW:"₩",JPY:"¥",USD:"$",EUR:"€",GBP:"£"};
-function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");s=s.replace(/^(?:SIZE|사이즈)\s*[:.]?\s*(\d{1,2})(?!\d)/,"$1 ").replace(/^(\d{1,2})\s*(?:SIZE|사이즈)/,"$1 ");{const cm=s.match(/\((\d{2}(?:\.\d)?)\s*CM\)/);if(cm)return String(Math.round(+cm[1]*10))}const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
+function sizeKey(s){s=clean(s).toUpperCase().replace(/(\d{1,2})\s*1\/2/,"$1.5");if(/^(X{1,3}-?)?(SMALL|LARGE)$|^MEDIUM$/.test(s.trim()))s=s.trim().replace(/^(X{1,3})-?/,"$1").replace("SMALL","S").replace("MEDIUM","M").replace("LARGE","L");s=s.replace(/^(?:SIZE|사이즈)\s*[:.]?\s*(\d{1,2})(?!\d)/,"$1 ").replace(/^(\d{1,2})\s*(?:SIZE|사이즈)/,"$1 ");{const cm=s.match(/\((\d{2}(?:\.\d)?)\s*CM\)/);if(cm)return String(Math.round(+cm[1]*10))}const m=s.match(/(?:^|[\s/·\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\d{2,3}(?:\.\d)?|\d{1,2}(?:\.5)?))(?=$|[\s/·\-_)])/);return m?m[1]:s}
 function availOf(v){v=String(v||"").toLowerCase();if(/instock|in_stock|limitedavailability|presale|preorder/.test(v))return "in";if(/outofstock|out_of_stock|soldout|discontinued/.test(v))return "out";return "unk"}
 
 function parseLD(doc){const out=[];doc.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{const j=JSON.parse(s.textContent.trim());const walk=x=>{if(!x)return;if(Array.isArray(x))return x.forEach(walk);if(typeof x!=="object")return;if(x["@graph"])walk(x["@graph"]);const t=x["@type"];if(t==="Product"||(Array.isArray(t)&&t.includes("Product"))||t==="ProductGroup")out.push(x);if(x.hasVariant)walk(x.hasVariant)};walk(j)}catch(e){}});return out}
@@ -258,6 +258,9 @@ async function readProduct(url){
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock){const os=optionStock(doc);if(os){P.stock=os;P.src.push("옵션 품절 표시")}}
   if(!P.stock){const ss=scriptStock(html);if(ss){P.stock=ss;P.src.push("페이지 상품 데이터")}}
+  /* 옵션이 사이즈가 아니라 상품 이름 · 모델명인 경우(가방 등): 사이즈 재고 대신 '전체 재고'로 */
+  if(P.stock){const ks=Object.keys(P.stock);const sizeLike=k=>/^(XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|O\/S|\d{1,3}(\.\d)?|US ?\d+(\.5)?|EU ?\d+|UK ?\d+(\.5)?|JP ?\d+)$/i.test(k);
+    if(ks.length&&ks.every(k=>!sizeLike(k))&&ks.some(k=>k.length>8||/\s.*\s/.test(k))){P.whole=ks.some(k=>P.stock[k]==="in")?"in":"out";delete P.stock;P.src.push("사이즈 없는 상품")}}
   /* 주문 제작(커스텀 · 오더메이드): 재고 개념이 없는 상품 */
   try{const d2=doc.cloneNode(true);d2.querySelectorAll("script,style,noscript,footer,header,nav").forEach(n=>n.remove());const bt=clean(d2.body?d2.body.textContent:"");
     if(!P.stock&&/주문\s*(과|후|시|즉시|하시면|이\s*들어오면)?\s*(동시에|바로)?\s*제작|주문\s*제작|제작(이|에)?\s*(되며|됩니다|들어가|기간|소요)|\d+\s*(주|일|영업일)\s*(정도|가량|이상)?\s*(소요|걸립)|커스텀\s*(오더|제작|부츠|슈즈)?|오더\s*메이드|수\s*제작|비스포크|made[\s-]*to[\s-]*order|bespoke|custom\s*order|\bMTO\b/i.test(bt+" "+P.name)){P.mto=true;P.src.push("주문 제작")}
@@ -357,6 +360,9 @@ async function refreshItem(it,quiet){
         const left=nm.replace(/\d+(?:\.\d)?\s*[만천]/g," ").replace(/[ⓘ①\d]/g," ").split(/\s+/).filter(w=>w&&!bn.includes(brKey(w))).join("");
         const junk=left.length<3||/\d(?:\.\d)?\s*[만천]\s*$/.test(nm);
         if(junk&&(isOfficialSeller(it,s)||/\d(?:\.\d)?\s*[만천]\s*$/.test(nm))){it.name=clean(P.name);it.upd=Date.now()}}
+      if(isOfficialSeller(it,s)&&P.currency&&!/KRW/i.test(P.currency)&&/[가-힣]/.test(it.brand||"")){
+        try{const u2=new URL(s.url);const h2=u2.hostname.replace(/^(international|global|intl|en|us|www-en)\./i,"");if(h2!==u2.hostname){u2.hostname=h2;const Q=await readProduct(u2.href);if(Q&&Q.price!=null&&(!Q.currency||/KRW/i.test(Q.currency))){P.price=Q.price;P.currency="KRW";if(Q.stock)P.stock=Q.stock;s.url=u2.href}}}catch(e){}
+        if(P.currency&&!/KRW/i.test(P.currency)&&P.price!=null){try{const fx=await fxRates();const code=String(P.currency).toUpperCase();if(fx.r[code]){P.price=window.archiveFx.conv(+P.price,code,"KRW",fx.r);P.currency="KRW";s.note="해외 공식몰 가격을 원화로 바꿨어요"}}catch(e){}}}
       if(isOfficialSeller(it,s)){const fp=fmtPrice(P.price,P.currency);if(fp&&it.kind==="wish"&&it.price!==fp){it.price=fp;it.upd=Date.now()}
         if(P.chart&&P.chart.rows&&P.chart.rows.length&&(!it.chart||it.chartGen||it.chartSrc!=="official")){it.chart=P.chart;it.chartGen=false;it.chartSrc="official";it.upd=Date.now()}}const before={...(s.stock||{})},bp=s.price;
       const wasClosed=s.closed;if(P.mto){s.mto=true;s.closed=!!P.closed}if(s.mto&&!quiet&&wasClosed!==undefined&&wasClosed!==s.closed)toast(`${s.shop}: ${s.closed?"주문이 마감됐어요":"주문이 다시 열렸어요"}`);s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.ckAt=Date.now();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
@@ -735,6 +741,7 @@ $("subcats").addEventListener("click",e=>{const b=e.target.closest(".subadd");if
   const nb=sc.querySelector(`[data-s="${sid[0]}"]`);if(nb)nb.click();toast(`'${nm}' 추가했어요`)},true);
 function agoTxt(t){const m=Math.round((Date.now()-t)/60000);return m<60?(m<2?"방금 확인":m+"분 전 확인"):m<1440?Math.round(m/60)+"시간 전 확인":Math.round(m/1440)+"일 전 확인"}
 function rankMode(){const m=$("masonry");if(!m)return;m.classList.add("ranked");m.querySelectorAll(".prio-h").forEach(x=>x.remove());
+  {const pd=document.querySelector(".priodir-wrap");if(pd){const anyWish=[...m.querySelectorAll(".pin[data-id]")].some(p=>!p.hidden&&(ITEMS.find(x=>x.id===p.dataset.id)||{}).kind==="wish");pd.hidden=!anyWish}}
   let last=null;m.querySelectorAll(".pin[data-id]").forEach(p=>{const it=ITEMS.find(x=>x.id===p.dataset.id);if(!it)return;
     const ck=Math.max(0,...(it.sellers||[]).map(x=>x.ckAt||0));const tx=p.querySelector(".tx");if(tx){const old=tx.querySelector(".ago");if(old)old.remove();if(ck&&it.kind==="wish")tx.insertAdjacentHTML("beforeend",`<span class="ago">${agoTxt(ck)}</span>`)}
     if(p.hidden||it.kind!=="wish"){if(!p.hidden)last=null;return}const pr=prioNum(it.priority);

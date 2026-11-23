@@ -33,6 +33,7 @@ def tea_block(sz, a, b, c):
 PD_NONE = '<p>검색결과가 없습니다</p><ul><li><a href="/product/mto-레귤러-카라-드레스-셔츠-블루/91/category/67/display/1/"><span class="name">MTO) 레귤러 카라 드레스 셔츠 (블루)</span></a></li></ul>'
 PD_KUBAN = '<ul>' + ''.join(f'<li><a href="/product/x/{n}/category/65/display/1/"><span class="name">{t}</span></a></li>' for n, t in [(292, "쿠반 오픈카라 린넨 셔츠 (그레이)"), (291, "쿠반 오픈카라 린넨 셔츠 (네이비)"), (246, "[Restock] 쿠반 옥스포드 오버 셔츠 (그레이 S.P)")]) + '</ul>'
 PAGES = {
+    "https://t.test/bag": '<html><head><script type="application/ld+json">{"@type":"Product","name":"B01 SLING BAG","offers":[{"@type":"Offer","name":"B01 URBAN TRANSIT GEAR SLING BAG - PULSE GREEN","price":"89000","priceCurrency":"KRW","availability":"https://schema.org/InStock"},{"@type":"Offer","name":"B01 URBAN TRANSIT GEAR SLING BAG - BLACK","price":"89000","priceCurrency":"KRW","availability":"https://schema.org/OutOfStock"}]}</script></head><body>' + "x" * 300 + '</body></html>',
     "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("CL WOVEN LEATHER BELT", safe=""): PD_NONE,
     "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("CL", safe=""): "<p>검색결과가 없습니다</p>",
     "https://wd.test/product/search.html?keyword=" + __import__("urllib.parse").parse.quote("WOVEN", safe=""): '<ul><li><a href="/product/cl-woven-leather-belt-dark-brown/1280/category/93/display/1/"><span class="name">CL WOVEN LEATHER BELT (DARK BROWN)</span></a></li></ul>',
@@ -134,6 +135,8 @@ def run():
         lg = pg.evaluate("""async()=>{localStorage.setItem('archive-devlog','[]');await window.archiveChartForItem({id:'lg',name:'테스트 자켓',kind:'wish',c:'outer',sellers:[{shop:'x',url:'https://t.test/nm'}]},[]);
           const L=JSON.parse(localStorage.getItem('archive-devlog')||'[]');const f=L.find(x=>x.k==='fail');return f?[f.url,f.msg.startsWith('사이즈표 못 가져옴')]:null}""")
         check("사이즈표 못 가져오면 문제 보내기에 링크와 함께 남기기", lg, ["https://t.test/nm", True])
+        check("SMALL · MEDIUM · X-LARGE → S · M · XL", pg.evaluate(f"['SMALL','Medium','X-LARGE','XXLARGE'].map({A}.sizeKey)"), ["S", "M", "XL", "XXL"])
+        check("옵션이 상품 이름(가방)이면 사이즈 대신 전체 재고", rd("https://t.test/bag", "[!!P.stock,P.whole]"), [False, "in"])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"

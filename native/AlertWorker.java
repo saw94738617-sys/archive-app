@@ -152,6 +152,7 @@ public class AlertWorker extends Worker {
     static final Pattern SZ = Pattern.compile("(?:^|[\\s/·\\-_(])((?:XX?S|XX?L|XXXL|[SML]|FREE|F|ONE ?SIZE|\\d{2,3}(?:\\.\\d)?|\\d{1,2}(?:\\.5)?))(?=$|[\\s/·\\-_)])");
     static String sizeKey(String s) {
         s = s == null ? "" : s.replaceAll("\\s+", " ").trim().toUpperCase(Locale.ROOT).replaceAll("(\\d{1,2})\\s*1/2", "$1.5");
+        { String t = s.trim(); if (t.matches("^(X{1,3}-?)?(SMALL|LARGE)$|^MEDIUM$")) s = t.replaceAll("^(X{1,3})-?", "$1").replace("SMALL", "S").replace("MEDIUM", "M").replace("LARGE", "L"); }
         s = s.replaceAll("^(?:SIZE|사이즈)\\s*[:.]?\\s*(\\d{1,2})(?!\\d)", "$1 ").replaceAll("^(\\d{1,2})\\s*(?:SIZE|사이즈)", "$1 ");
         Matcher cmm = Pattern.compile("\\((\\d{2}(?:\\.\\d)?)\\s*CM\\)").matcher(s);
         if (cmm.find()) return String.valueOf(Math.round(Double.parseDouble(cmm.group(1)) * 10));
