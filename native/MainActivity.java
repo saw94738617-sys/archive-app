@@ -84,6 +84,11 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
         String id = intent.getStringExtra("openItem");
         if (id != null && !id.isEmpty())
             getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putString("open", id).apply();
+        // 업데이트 알림을 눌러서 열었으면: 앱이 켜져 있던 중이어도 바로 업데이트 창을 띄우게 표시해 둬요
+        if (intent.getBooleanExtra("archiveUpdate", false)) {
+            getSharedPreferences(AlertWorker.PREF, MODE_PRIVATE).edit().putBoolean("openUpdate", true).apply();
+            intent.removeExtra("archiveUpdate");
+        }
         // 다른 앱에서 '공유 → 아카이브': 넘겨받은 글(제목 · 링크)만 저장해 두고 앱에서 위시 기록 화면으로 열어요
         if (Intent.ACTION_SEND.equals(intent.getAction()) && intent.getType() != null && intent.getType().startsWith("image/")) {
             // 캡처(사진) 공유: 폰 안에서 글자를 읽으려고 사진만 앱으로 넘겨요

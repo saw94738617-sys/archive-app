@@ -1071,6 +1071,7 @@ async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP
     if(u.stock){s.stock=u.stock;changed=true}if(u.price){s.price=u.price;changed=true}s.checked=stamp()}
   if(changed){persistAll();if(typeof renderPins==="function")renderPins()}
   if(r.open){const it=ITEMS.find(x=>x.id===r.open);if(it)setTimeout(()=>openDetail(it.id),300)}
+  if(r.openUpdate)setTimeout(async()=>{window.__lastUpdCheck=Date.now();const ok=await checkUpdate(false);if(!ok)toast(`최신 버전이에요 · v${window.ARCHIVE_VERSION}`)},300);
   if(r.share)setTimeout(()=>fromShare(r.share,r.shareSub||""),350);
   if(r.shareImg)setTimeout(()=>fromShot(r.shareImg),r.share?1500:350);
   if(r.lastAt){try{localStorage.setItem("archive-bgalert",JSON.stringify({at:r.lastAt,msg:r.lastMsg||""}))}catch(e){}}}

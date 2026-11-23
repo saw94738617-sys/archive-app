@@ -99,6 +99,7 @@ public class ArchiveNotifyPlugin extends Plugin {
         r.put("open", sp.getString("open", ""));
         r.put("lastAt", sp.getLong("lastAt", 0));
         r.put("lastMsg", sp.getString("lastMsg", ""));
+        r.put("openUpdate", sp.getBoolean("openUpdate", false));
         r.put("share", sp.getString("share", ""));
         r.put("shareSub", sp.getString("shareSub", ""));
         String ip = sp.getString("shareImg", "");
@@ -111,7 +112,7 @@ public class ArchiveNotifyPlugin extends Plugin {
                 f.delete();
             } catch (Exception e) { /* 사진을 못 읽으면 건너뛰어요 */ }
         }
-        sp.edit().putString("updates", "[]").remove("open").remove("share").remove("shareSub").remove("shareImg").apply();
+        sp.edit().putString("updates", "[]").remove("open").remove("openUpdate").remove("share").remove("shareSub").remove("shareImg").apply();
         call.resolve(r);
     }
 
