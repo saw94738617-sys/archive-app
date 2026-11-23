@@ -120,6 +120,11 @@ def run():
         vdr = "<table><tr><th>사이즈</th><th>총장</th><th>허리</th><th>허벅지</th><th>밑위</th><th>밑단</th></tr><tr><td>S (30Inch)</td><td>99</td><td>39</td><td>30</td><td>30.5</td><td>20</td></tr><tr><td>M (32Inch)</td><td>100</td><td>41</td><td>31</td><td>31.5</td><td>21</td></tr><tr><td>L (34Inch)</td><td>101</td><td>43</td><td>32</td><td>32.5</td><td>22</td></tr></table>"
         check("사이즈 칸에 '(30Inch)'가 붙은 표 (비디알)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows[0].join(':')]})", vdr),
               [["S", "M", "L"], "총장:99:100:101"])
+        g1 = "<table><tr><td>구분</td><td>[ 1 ]사이즈</td><td>[ 2 ]사이즈</td></tr><tr><td>총장(cm)</td><td>70</td><td>72</td></tr><tr><td>가슴 단면</td><td>58cm</td><td>60cm</td></tr></table>"
+        g2 = "<table><tr><th>SIZE</th><th>어깨</th><th>가슴</th><th>총장</th></tr><tr><td>Free(남녀공용)</td><td>52</td><td>64</td><td>74</td></tr></table>"
+        g3 = "<table><tr><th>cm</th><th>허리</th><th>밑위</th></tr><tr><td>28 인치</td><td>38</td><td>30</td></tr><tr><td>30 인치</td><td>40</td><td>31</td></tr></table>"
+        gen = pg.evaluate("(hs=>hs.map(h=>{const c=" + A + ".findChart(new DOMParser().parseFromString(h,'text/html'));return c&&c.cols.join('/')+'|'+c.rows[0].join(':')}))", [g1, g2, g3])
+        check("처음 보는 표 모양도 읽기 (괄호 · 사이즈 · 인치 글자)", gen, ["1/2|총장:70:72", "FREE|어깨:52|64".replace("|64", ""), "28/30|허리:38:40"])
         check("글로 쓴 사이즈표 (비긴202)", pg.evaluate("(h=>{const d=new DOMParser().parseFromString(h,'text/html');const c=" + A + ".findChart(d);return c&&[c.cols,c.rows.map(r=>r.join(':'))]})", txt),
               [["1", "2"], ["허리:37.5:39.5", "밑위:33.5:34", "허벅지:33:34", "밑단:29:30", "총장:107:108"]])
 

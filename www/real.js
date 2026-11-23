@@ -130,7 +130,24 @@ function findChart(doc){
     const sizesCol=rows.slice(1).map(r=>szc(r[0]));
     if(sizesCol.length&&sizesCol.every(c=>SZ.test(c))&&h.slice(1).some(x=>LB.test(x))){
       const labels=h.slice(1);return {cols:sizesCol.map(c=>c.toUpperCase()),rows:labels.map((l,li)=>[l.replace(/\(cm\)/i,"").trim(),...rows.slice(1).map(r=>(r[li+1]||"").replace(/cm/i,"").trim())])}}
-  }return chartFromLines(docText(doc),SZ,LB)}
+  }return genericChart(doc,SZ,LB)||chartFromLines(docText(doc),SZ,LB)}
+/* 넓은 기준: 어떤 표든 '치수 이름(총장 · 허리 …) + 숫자'가 모여 있으면 사이즈표로 봐요.
+   사이즈 이름의 괄호 · 대괄호 · '사이즈' · 'inch' 같은 군더더기는 떼고 읽어요 */
+function szNorm(c){let t=String(c||"").replace(/\s+/g," ").trim();const o=t;
+  t=t.replace(/[\(\[][^)\]]{0,16}[\)\]]/g," ").replace(/\b(size|사이즈|inch|인치)\b/gi," ").replace(/사이즈|인치|SIZE/gi," ").replace(/[\[\]()]/g," ").replace(/\s+/g," ").trim();
+  if(!t){const m=o.match(/[\(\[]\s*([^)\]]{1,8})\s*[\)\]]/);t=m?m[1].trim():o}return t.toUpperCase()}
+function genericChart(doc,SZ,LB){const isSz=c=>{const n=szNorm(c);return !!n&&(SZ.test(n)||/^[A-Z0-9][A-Z0-9.\-\/]{0,5}$/.test(n))&&!LB.test(c)};
+  const num=v=>/^[\d.,]+\s*(cm|mm)?$/i.test(String(v||"").trim());const lab=c=>String(c||"").replace(/\(cm\)|\(mm\)|cm$/i,"").trim();
+  for(const t of doc.querySelectorAll("table")){const rows=[...t.querySelectorAll("tr")].map(tr=>[...tr.children].map(td=>clean(td.textContent)));if(rows.length<2)continue;
+    /* A: 치수 이름이 첫 칸 (세로로 나열) · 사이즈는 그 위 줄 */
+    {const li=rows.map((r,i)=>LB.test(r[0]||"")&&r.slice(1).some(num)?i:-1).filter(i=>i>=0);
+      if(li.length>=2){const hi=li[0]-1;const head=hi>=0?rows[hi]:null;if(head){const cols=head.slice(1).map(szNorm).filter(Boolean);
+        if(cols.length&&head.slice(1).filter(Boolean).every(isSz))return {cols,rows:li.map(i=>[lab(rows[i][0]),...cols.map((_,k)=>(rows[i][k+1]||"").replace(/cm|mm/i,"").trim())])}}}}
+    /* B: 치수 이름이 맨 위 줄 · 사이즈는 각 줄 첫 칸 */
+    {const hi=rows.findIndex(r=>r.slice(1).filter(c=>LB.test(c)).length>=2);
+      if(hi>=0){const head=rows[hi];const body=rows.slice(hi+1).filter(r=>isSz(r[0])&&r.slice(1).some(num));
+        if(body.length>=1){const cols=body.map(r=>szNorm(r[0]));return {cols,rows:head.slice(1).map((l,k)=>[lab(l),...body.map(r=>(r[k+1]||"").replace(/cm|mm/i,"").trim())]).filter(r=>r[0])}}}}}
+  return null}
 /* 글로 쓴 사이즈: '-1사이즈 : 허리 37.5cm / 밑위 33.5cm / …', 'S - 어깨 50 / 가슴 60' (줄바꿈이 사이에 끼어도 읽어요) */
 function chartFromLines(txt,SZ,LB){const by={},labels=[],cols=[];const ls=[];
   for(const l of String(txt).replace(/\r/g,"").split("\n")){const t=l.replace(/\s+/g," ").trim();if(!t)continue;if(ls.length&&/^[\d.]+\s*(cm|mm)?$/i.test(t))ls[ls.length-1]+=" "+t;else ls.push(t)}
