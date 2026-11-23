@@ -208,6 +208,10 @@ async function readProduct(url){
   const sh=await shopifyData(url,html);if(sh){P.src.push("Shopify");P.name=P.name||sh.name;P.brand=P.brand||sh.brand;if(P.price==null&&sh.price!=null){P.price=sh.price;P.currency=sh.currency}sh.images.forEach(u=>{if(!P.images.includes(u))P.images.push(u)});if(sh.stock)P.stock=sh.stock}
   if(!P.stock){const os=optionStock(doc);if(os){P.stock=os;P.src.push("옵션 품절 표시")}}
   if(!P.stock){const ss=scriptStock(html);if(ss){P.stock=ss;P.src.push("페이지 상품 데이터")}}
+  /* 주문 제작(커스텀 · 오더메이드): 재고 개념이 없는 상품 */
+  try{const d2=doc.cloneNode(true);d2.querySelectorAll("script,style,noscript,footer,header,nav").forEach(n=>n.remove());const bt=clean(d2.body?d2.body.textContent:"");
+    if(!P.stock&&/주문\s*제작|커스텀\s*(오더|제작|부츠|슈즈)?|제작\s*기간|오더\s*메이드|수\s*제작|비스포크|made[\s-]*to[\s-]*order|bespoke|custom\s*order|\bMTO\b/i.test(bt+" "+P.name)){P.mto=true;P.src.push("주문 제작")}
+    if(P.mto)P.closed=/(주문|오더|접수)\s*(이\s*)?(마감|종료|중단)|판매\s*(중지|종료)/.test(bt)}catch(e){}
   if(!P.stock){try{const i=html.search(/"(?:soldOut|isSoldOut|sold_out|stockQuantity|inventory)"/i);if(i>=0)devLog({k:"info",host:new URL(url).hostname,msg:"재고 데이터 모양: "+html.slice(Math.max(0,i-160),i+160).replace(/\s+/g," ")})}catch(e){}}
   /* 색상별 재고 */
   try{let by=null;
@@ -269,7 +273,7 @@ async function realFetch(){
     if(!P.chart&&P.detail&&P.detail.length&&OCR){$("fetchStatus").innerHTML='<span class="spin"></span>상세 이미지에서 사이즈표 찾는 중…';try{const r=await chartFromDetail(P.detail);if(r){P.chart=r.chart;P.chartImg=r.img}}catch(e){}}
     if(!P.chart&&(P.stock||P.sizePairs)){const c=shoeChart(Object.keys(P.stock||P.sizePairs),recCat==="shoes"||SHOE_RE.test(P.name||"")||!!P.sizePairs,P.sizePairs);if(c){P.chart=c;P.chartGen=true}}
     addSeller(v);const s=recSellers.find(x=>x.url===v);
-    if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stockBy)s.stockBy=P.stockBy;if(P.colors)setRecColors(P.colors);if(P.stock||P.stockBy){s.stock=stockFor(P,recOptColor)||P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
+    if(s){s.shop=P.shop&&P.shop.length<20?P.shop:s.shop;s.price=fmtPrice(P.price,P.currency);if(P.stockBy)s.stockBy=P.stockBy;if(P.colors)setRecColors(P.colors);if(P.mto){s.mto=true;s.closed=!!P.closed}if(P.stock||P.stockBy){s.stock=stockFor(P,recOptColor)||P.stock;s.checked=stamp()}if(P.whole)s.warn=P.whole==="out"?"품절로 표시돼요":"";renderSellers()}
     const fill=[];
     if(P.name&&!$("fName").value){$("fName").value=P.name;$("fName").classList.add("flash");fill.push("이름")}
     if(P.brand&&!$("fBrand").value){$("fBrand").value=P.brand;fill.push("브랜드")}
@@ -290,7 +294,7 @@ async function realFetch(){
 /* 재고 다시 확인 */
 async function refreshItem(it,quiet){
   const res=[];for(const s of (it.sellers||[])){try{const P=await readProduct(s.url);const before={...(s.stock||{})},bp=s.price;
-      s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
+      const wasClosed=s.closed;if(P.mto){s.mto=true;s.closed=!!P.closed}if(s.mto&&!quiet&&wasClosed!==undefined&&wasClosed!==s.closed)toast(`${s.shop}: ${s.closed?"주문이 마감됐어요":"주문이 다시 열렸어요"}`);s.price=fmtPrice(P.price,P.currency)||s.price;if(P.stockBy){s.stockBy=P.stockBy;if(P.colors&&!it.optColors)it.optColors=P.colors}if(P.stock||P.stockBy)s.stock=stockFor(P,it.optColor)||P.stock;s.checked=stamp();s.warn=P.whole==="out"?"품절로 표시돼요":"";res.push({s,before,bp,ok:true})}
     catch(e){res.push({s,ok:false})}}
   if(!quiet){const ok=res.filter(r=>r.ok).length;toast(ok?`${ok}곳 확인했어요 · ${stamp()}`:"판매처 페이지를 읽지 못했어요")}
   return res}
@@ -1058,7 +1062,7 @@ function watchList(){const st=shopStore();return ITEMS.filter(x=>x.kind==="wish"
     const my=(typeof myCols==="function"?myCols(it).names[0]:"")||"";
     const sellers=(it.sellers||[]).filter(s=>{if(!/^https?:/.test(s.url||"")||noFetch(s.url))return false;const o=originOf(s.url);const t=st.terms[o];if(t&&t.result==="ban")return false;const rb=(st.robots||{})[o];if(rb){try{const u=new URL(s.url);if(!robotsOk(rb,u.pathname+u.search))return false}catch(e){}}return true})
       .map(s=>({url:s.url,shop:s.shop||"",price:s.price||"",stock:s.stock||null}));
-    return {id:it.id,title:(it.brand?it.brand+" ":"")+it.name+(it.optColor?" ("+it.optColor+")":""),color:it.optColor||"",my,restock:!!it.alert.restock,price:!!it.alert.price,target:+(it.alert.target||0),sellers}}).filter(w=>w.sellers.length)}
+    return {id:it.id,title:(it.brand?it.brand+" ":"")+it.name+(it.optColor?" ("+it.optColor+")":""),color:it.optColor||"",my,restock:!!it.alert.restock&&!(it.sellers||[]).every(s=>s.mto),price:!!it.alert.price,target:+(it.alert.target||0),sellers}}).filter(w=>w.sellers.length)}
 let lastWatch="";
 async function pushWatch(){if(!NTP||!NTP.setWatch)return;try{const j=JSON.stringify(watchList());if(j===lastWatch)return;lastWatch=j;const fr=(typeof alertCfg!=="undefined"&&+alertCfg.freq)||3;await NTP.setWatch({json:j,hours:Math.round(24/fr)})}catch(e){devLog({k:"err",msg:"알림 목록 넘기기: "+(e.message||e)})}}
 async function pullWatch(){if(!NTP||!NTP.pullAlerts)return;let r;try{r=await NTP.pullAlerts()}catch(e){return}
@@ -1407,6 +1411,9 @@ document.addEventListener("click",e=>{if(!e.target.closest("#offGo"))return;cons
   const en=/^[A-Za-z0-9 .&'’\-]+$/.test(br)?br:"";const kno=(typeof BR!=="undefined")?BR.brands.find(r=>[r.name,...(r.aka||[])].some(n=>n&&brKey(n)===brKey(br))):null;
   const alias=kno?[kno.name,...(kno.aka||[])].find(n=>/^[A-Za-z0-9 .&'’\-]+$/.test(n||"")):"";
   toOfficial(nm,`${br}${(en||alias)&&(en||alias)!==br?"("+(en||alias)+")":(en?"":"")} ${nm}`,{ko:br,en:en||alias||"",name:nm})});
+/* 판매처 '주문 제작으로 표시' · '해제' */
+document.addEventListener("click",e=>{const b=e.target.closest("[data-mto]");if(!b)return;const it=ITEMS.find(x=>x.id===dtId);if(!it)return;const s=(it.sellers||[]).find(x=>x.url===b.dataset.mto);if(!s)return;
+  s.mto=!s.mto;if(!s.mto)s.closed=false;it.upd=Date.now();if(typeof pushWatch==="function")pushWatch();dtSave(it,s.mto?"주문 제작으로 표시했어요":"주문 제작 표시를 풀었어요")});
 /* ---------- 28) 색상 옵션 고르기 (색마다 재고가 달라요) ---------- */
 let recOptColor="",recOptColors=[];
 const CNAME_HEX=[[/black|블랙|검정/i,"#1c1c1c"],[/navy|네이비|남색/i,"#1f2a44"],[/white|화이트|흰/i,"#f4f2ec"],[/ivory|아이보리|ecru|에크루|오프 ?화이트|off ?white/i,"#ece4d2"],[/cream|크림/i,"#efe6cf"],[/beige|베이지/i,"#d6c4a3"],[/sand|샌드/i,"#cdb994"],[/brown|브라운|갈색/i,"#6b4a32"],[/camel|카멜/i,"#b5895a"],[/tan|탄/i,"#b08a62"],[/khaki|카키/i,"#7a7451"],[/olive|올리브/i,"#5e6240"],[/green|그린|초록/i,"#3f5e45"],[/indigo|인디고/i,"#2d3a5c"],[/blue|블루|파랑/i,"#3a5a8c"],[/sky|스카이/i,"#8db3d6"],[/grey|gray|그레이|회색|charcoal|차콜/i,"#6f6f6f"],[/red|레드|빨강/i,"#a33a32"],[/burgundy|버건디|wine|와인/i,"#6a2330"],[/pink|핑크/i,"#d9a3ad"],[/yellow|옐로|노랑|mustard|머스타드/i,"#c9a23a"],[/orange|오렌지/i,"#c8622d"],[/purple|퍼플|보라/i,"#6a4c7a"]];
