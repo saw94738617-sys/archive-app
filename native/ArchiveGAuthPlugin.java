@@ -20,7 +20,7 @@ public class ArchiveGAuthPlugin extends Plugin {
     public void silent(PluginCall call) {
         try {
             AuthorizationRequest req = AuthorizationRequest.builder()
-                .setRequestedScopes(Arrays.asList(new Scope("https://www.googleapis.com/auth/drive.appdata"), new Scope("email"), new Scope("profile")))
+                .setRequestedScopes(Arrays.asList(new Scope("https://www.googleapis.com/auth/drive.appdata"), new Scope("https://www.googleapis.com/auth/drive.file"), new Scope("email"), new Scope("profile")))
                 .build();
             Identity.getAuthorizationClient(getActivity()).authorize(req)
                 .addOnSuccessListener(res -> {

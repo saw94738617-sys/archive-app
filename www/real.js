@@ -521,7 +521,7 @@ if(window.ARCHIVE_DEV){
 /* ---------- 8) Google 로그인 · 드라이브 자동 백업 ---------- */
 const GCLIENT=window.ARCHIVE_GOOGLE_CLIENT||"";
 const SL=NATIVE?plug("SocialLogin"):null;
-const SCOPES=["email","profile","https://www.googleapis.com/auth/drive.appdata"];
+const SCOPES=["email","profile","https://www.googleapis.com/auth/drive.appdata","https://www.googleapis.com/auth/drive.file"];
 const WF=(window.CapacitorWebFetch||window.fetch).bind(window);
 const BKNAME="archive-backup.json";
 let G={};try{G=JSON.parse(localStorage.getItem("archive-google")||"{}")}catch(e){}
@@ -549,6 +549,8 @@ async function drive(path,opt={},interactive){
     const r=await WF(url,{method:opt.method||"GET",headers,body});return r};
   let r=await call(await gToken(interactive));
   if(r.status===401){G.at=0;saveG();if(interactive){r=await call(await gToken(true))}else{G.need=true;saveG();throw new Error("다시 연결 필요")}}
+  /* 새 권한(문제함 drive.file)이 아직 없으면 한 번 다시 로그인해서 허용받기 */
+  if(r.status===403&&interactive&&!opt._re){let t="";try{t=await r.text()}catch(e){}if(/insufficient|scope|PERMISSION/i.test(t)){G.at=0;G.token="";saveG();try{await gLogin()}catch(e){}r=await call(await gToken(true))}}
   if(!r.ok){let msg="";try{msg=(await r.text()).slice(0,140)}catch(e){}throw new Error("드라이브 "+r.status+(msg?" "+msg:""))}
   return r}
 async function findBackup(interactive){const r=await drive(`drive/v3/files?spaces=appDataFolder&q=${encodeURIComponent(`name='${BKNAME}'`)}&fields=files(id,modifiedTime,size)&orderBy=modifiedTime desc`,{},interactive);const j=await r.json();return (j.files||[])[0]||null}
@@ -1653,7 +1655,8 @@ document.addEventListener("click",async e=>{const b=e.target.closest("#dtOdd");i
   if(e.target.closest("#oddSend")){const it=ITEMS.find(x=>x.id===dtId);if(!it)return;const picks=[...document.querySelectorAll('[data-odd][aria-pressed="true"]')].map(x=>x.dataset.odd);
     const st=(it.sellers||[]).map(x=>{let h="";try{h=new URL(x.url).hostname}catch(_){}return `  · ${x.shop||""} (${h}) ${x.price||""} 재고:${Object.entries(x.stock||{}).map(([k,v])=>k+(v==="in"?"✓":"✗")).join(" ")||"-"}${window.archiveIsOfficial(it,x)?" [공식몰]":""}`}).join("\n");
     const txt=`[아카이브 · 이 기록 이상해요] v${window.ARCHIVE_VERSION||""}\n- 이상한 곳: ${picks.join(", ")||"(안 고름)"}${$("oddMemo").value?"\n- 메모: "+$("oddMemo").value:""}\n- 이름: ${it.name} / 브랜드: ${it.brand||"-"} / 가격: ${it.price||"-"} / 카테고리: ${it.c||"-"}\n- 사이즈표: ${it.chart?(it.chart.cols||[]).join("·")+(it.chartSrc?" ("+it.chartSrc+")":""):"없음"}\n- 판매처:\n${st}`;
-    devLog({k:"user",host:"",msg:picks.join(",")+" · "+String(it.name).slice(0,40)});await shareOut(txt);$("oddBox").hidden=true}});
+    const u0=((it.sellers||[]).find(x=>/^https?:/.test(x.url||""))||{}).url||"";let h0="";try{h0=new URL(u0).hostname}catch(_){}
+    devLog({k:"user",host:h0,url:u0,msg:"이 기록 이상해요: "+(picks.join(",")||"안 고름")+($("oddMemo").value?" · 메모: "+$("oddMemo").value:"")+" · "+txt.split("\n").slice(2).join(" / ").slice(0,600)});$("oddBox").hidden=true;await sendIssues()}});
 async function shareOut(txt){try{if(NTP&&NTP.shareText){await NTP.shareText({text:txt});return}}catch(e){}
   try{await navigator.clipboard.writeText(txt)}catch(e){const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy")}catch(_){}t.remove()}toast("복사했어요 · Claude 채팅에 붙여넣어 주세요")}
 /* 가격 화폐(₩ ¥ $)를 바꾸면 금액도 그날 환율로 바꿔요 (공개 환율 · 하루 한 번 받아 저장) */
@@ -1675,11 +1678,38 @@ window.archiveFx={rates:fxRates,conv:(v,from,to,r)=>{const k=v/r[from]*r[to];ret
     toast(`${from}${v.toLocaleString("ko-KR")} → ${to}${n.toLocaleString("ko-KR")} · ${fx.rough?"대략 환율(인터넷 연결 확인)":"환율 "+fx.date}`)})}}
 /* 문제 보내기: 못 읽은 사이트와 이유만 모아 복사 (개인 기록 · 사진 · 계정 정보 없음) */
 (()=>{const dr=$("drawer");const set=$("openSet");if(!dr||!set||$("sendIssues"))return;const b=document.createElement("button");b.className="mi";b.type="button";b.id="sendIssues";b.innerHTML="문제 보내기 <span>↗</span>";set.after(b);
-  b.onclick=async()=>{let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const since=+(localStorage.getItem("archive-report-at")||0);const fails=L.filter(x=>(x.t||0)>since&&(x.k==="fail"||x.k==="err"||x.k==="warn"||x.k==="user"));
-    const by={};fails.forEach(x=>{const k=(x.host||"?")+" · "+String(x.msg||"").slice(0,120)+(x.url?"\n    "+x.url:"");by[k]=(by[k]||0)+1});
-    const lines=Object.entries(by).sort((a,b)=>b[1]-a[1]).slice(0,30).map(([k,n])=>`- ${k}${n>1?" (×"+n+")":""}`);
-    const ver=(window.ARCHIVE_VERSION||"")+"";const txt=`[아카이브 문제 보고] ${ver}\n`+(lines.length?lines.join("\n"):"- 기록된 문제가 없어요");
-    if(!lines.length){toast(since?"지난번 보낸 뒤로 새 문제가 없어요":"기록된 문제가 없어요");return}await shareOut(txt);try{localStorage.setItem("archive-report-at",String(Date.now()))}catch(e){}}})();
+  b.onclick=()=>sendIssues()})();
+/* 문제함: 구글 드라이브의 '아카이브 문제함.json' 한 파일에 모아요 (앱이 만든 파일만 보는 drive.file 권한)
+   - 같은 문제(종류 · 사이트 · 링크 · 내용)는 한 줄로 합치고 횟수만 늘려요 → 중복 없음
+   - 이미 보낸 기록은 다시 보내지 않아요 (마지막으로 보낸 시각 이후만)
+   - Claude가 고치면 파일 설명에 fixedAt=시각을 남기고, 그 전까지 생긴 문제는 '고침'으로 바뀌어요 */
+const ISSUE_FILE="아카이브 문제함.json";
+function issueKey(x){const msg=String(x.msg||"").replace(/\s*·\s*[^·]*$/,m=>/못 (가져옴|읽음|찾음)/.test(String(x.msg||""))&&x.url?"":m).trim();return [x.k==="user"?"user":x.k,x.host||"",x.url||"",msg.slice(0,120)].join("|")}
+function issueEntries(){let L=[];try{L=JSON.parse(localStorage.getItem(LOGK)||"[]")}catch(e){}const since=+(localStorage.getItem("archive-report-at")||0);
+  const by={};for(const x of L){if((x.t||0)<=since||!/^(fail|err|warn|user)$/.test(x.k))continue;const k=issueKey(x);const e=by[k]||(by[k]={key:k,kind:x.k,host:x.host||"",url:x.url||"",msg:String(x.msg||"").slice(0,200),count:0,first:x.t,last:x.t});e.count++;e.first=Math.min(e.first,x.t);e.last=Math.max(e.last,x.t)}
+  return Object.values(by)}
+async function sendIssues(){const fresh=issueEntries();const ver=String(window.ARCHIVE_VERSION||"");
+  try{toast("문제함에 보내는 중…");
+    const q=encodeURIComponent(`name='${ISSUE_FILE}' and trashed=false`);const r=await drive(`drive/v3/files?spaces=drive&q=${q}&fields=files(id,description)&orderBy=modifiedTime desc`,{},true);const f0=((await r.json()).files||[])[0];
+    let box={app:"archive-issues",v:1,issues:[]},fid=f0&&f0.id;
+    if(fid){try{const t=await (await drive(`drive/v3/files/${fid}?alt=media`,{raw:true},true)).text();const j=JSON.parse(t||"{}");if(j&&Array.isArray(j.issues))box=j}catch(e){}}
+    const fixedAt=Date.parse(((f0&&f0.description)||"").match(/fixedAt=(\S+)/)?.[1]||"")||0;
+    const map=new Map(box.issues.map(x=>[x.key,x]));
+    if(fixedAt)for(const x of map.values())if(x.status!=="fixed"&&x.last<=fixedAt){x.status="fixed";x.fixedAt=fixedAt}
+    let nNew=0,nAgain=0;
+    for(const e of fresh){const o=map.get(e.key);if(!o){map.set(e.key,{...e,ver,status:"open"});nNew++;continue}
+      o.count+=e.count;o.last=Math.max(o.last,e.last);o.ver=ver;if(o.status==="fixed"&&e.last>(o.fixedAt||0)){o.status="open";o.reopened=(o.reopened||0)+1;nAgain++}}
+    box.issues=[...map.values()].sort((a,b)=>(a.status==="open"?0:1)-(b.status==="open"?0:1)||b.last-a.last).slice(0,400);box.updated=new Date().toISOString();box.ver=ver;
+    const open=box.issues.filter(x=>x.status==="open").length;
+    if(!fid){const c=await drive("drive/v3/files?fields=id",{method:"POST",headers:{"Content-Type":"application/json"},data:{name:ISSUE_FILE,mimeType:"application/json",description:"아카이브 앱 문제함 · Claude가 읽고 고쳐요"}},true);fid=(await c.json()).id;if(!fid)throw new Error("문제함 파일을 만들지 못했어요")}
+    await drive(`upload/drive/v3/files/${fid}?uploadType=media&fields=id`,{method:"PATCH",headers:{"Content-Type":"application/json"},data:JSON.stringify(box,null,1)},true);
+    try{localStorage.setItem("archive-report-at",String(Date.now()))}catch(e){}
+    toast(fresh.length?`문제함에 보냈어요 · 새 문제 ${nNew}개${nAgain?` · 다시 생긴 문제 ${nAgain}개`:""} · 고칠 문제 총 ${open}개`:`새 문제는 없어요 · 고칠 문제 총 ${open}개`)}
+  catch(err){/* 드라이브를 못 쓰면 예전처럼 공유 창으로 */
+    const lines=fresh.sort((a,b)=>b.count-a.count).slice(0,30).map(x=>`- ${x.host||"?"} · ${x.msg}${x.count>1?" (×"+x.count+")":""}${x.url?"\n    "+x.url:""}`);
+    if(!lines.length){toast("새 문제가 없어요 · 문제함 연결은 실패했어요");return}
+    toast("문제함 연결이 안 돼서 공유 창으로 보낼게요");await shareOut(`[아카이브 문제 보고] ${ver}\n`+lines.join("\n"));try{localStorage.setItem("archive-report-at",String(Date.now()))}catch(e){}}}
+window.archiveIssues={issueKey,issueEntries};
 /* 캡처로 넣은 'OO (검색)': 그 앱에서 검색 화면을 열고, 사용자가 상품을 골라 공유하면 진짜 링크로 바뀌어요 */
 document.addEventListener("click",e=>{const b=e.target.closest("[data-linkfix]");if(!b)return;e.preventDefault();const s=recSellers[+b.dataset.linkfix];if(!s)return;
   const nm=s.shop.replace(/\s*\(검색\)$/,"");window.open(s.url,"_blank","noopener");toast(`${nm}에서 상품을 열고 공유 → 아카이브를 누르면 이 자리에 들어가요`)});

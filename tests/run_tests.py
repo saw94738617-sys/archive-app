@@ -137,6 +137,12 @@ def run():
         check("사이즈표 못 가져오면 문제 보내기에 링크와 함께 남기기", lg, ["https://t.test/nm", True])
         check("SMALL · MEDIUM · X-LARGE → S · M · XL", pg.evaluate(f"['SMALL','Medium','X-LARGE','XXLARGE'].map({A}.sizeKey)"), ["S", "M", "XL", "XXL"])
         check("옵션이 상품 이름(가방)이면 사이즈 대신 전체 재고", rd("https://t.test/bag", "[!!P.stock,P.whole]"), [False, "in"])
+        dd = pg.evaluate("""(()=>{localStorage.setItem('archive-report-at','0');const t=Date.now();localStorage.setItem('archive-devlog',JSON.stringify([
+          {t:t-3,k:'fail',host:'a.com',url:'https://a.com/1',msg:'사이즈표 못 가져옴 · 자켓'},{t:t-2,k:'fail',host:'a.com',url:'https://a.com/1',msg:'사이즈표 못 가져옴 · 자켓'},
+          {t:t-1,k:'warn',host:'b.com',msg:'사이즈 이름이 이상해요: SMALL'},{t:t,k:'ok',host:'c.com',msg:'정상'}]));
+          const E=window.archiveIssues.issueEntries();localStorage.setItem('archive-report-at',String(t));const E2=window.archiveIssues.issueEntries();
+          return [E.length,E.find(x=>x.host==='a.com').count,E2.length]})()""")
+        check("문제 보내기: 같은 문제는 한 줄로 합치고, 보낸 뒤엔 다시 안 나옴", dd, [2, 2, 0])
         check("이름으로 카테고리 자동 선택", cats, ["outer/coat", "outer/jacket", "bottom/denim", "top/tee", "shoes/boots", "acc/hat"])
         check("비긴202 '1size(예약발송)'", pg.evaluate(f"['1size(12월10일 예약발송)','2사이즈','SIZE 3'].map({A}.sizeKey)"), ["1", "2", "3"])
         txt = "<p>사이즈<br>-1사이즈 : 허리 37.5cm / 밑위 33.5cm / 허벅지 33cm / 밑단 29cm / 총장<br>107cm<br>-2사이즈 : 허리 39.5cm / 밑위 34cm / 허벅지 34cm / 밑단 30cm / 총장<br>108cm</p><p>모델 정보<br>-Height 178cm / Bust 86cm / Waist 66cm / 2사이즈</p>"
